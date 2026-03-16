@@ -85,7 +85,8 @@ export interface MondayLead {
   timing?: 'On time' | 'Late' | 'Pending';
 }
 
-const CACHE_TTL_MS = 5 * 60 * 1000;
+/** Cache TTL: 30 min (like Dashboard - avoid refetch on every visit) */
+const CACHE_TTL_MS = 30 * 60 * 1000;
 
 interface UserLeadsDetailProps {
   userName: string;
@@ -115,7 +116,7 @@ function sortLeads(leads: MondayLead[], sort: DateSort): MondayLead[] {
 export default function UserLeadsDetail({ userName, userIndex, cachedData, onCacheUpdate }: UserLeadsDetailProps) {
   const [leads, setLeads] = useState<MondayLead[]>(cachedData?.leads ?? []);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>(cachedData?.statusCounts ?? {});
-  const [loading, setLoading] = useState(!cachedData || Date.now() - cachedData.ts > CACHE_TTL_MS);
+  const [loading, setLoading] = useState(!(cachedData?.leads?.length || Object.keys(cachedData?.statusCounts ?? {}).length));
   const [error, setError] = useState<string | null>(null);
   const [dateSort, setDateSort] = useState<DateSort>('latest');
   const [sortAnchorEl, setSortAnchorEl] = useState<null | HTMLElement>(null);
@@ -127,8 +128,8 @@ export default function UserLeadsDetail({ userName, userIndex, cachedData, onCac
     handleSortMenuClose();
   };
 
-  const fetchLeads = useCallback(async () => {
-    setLoading(true);
+  const fetchLeads = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/monday/leads?user=${encodeURIComponent(userName)}`);
@@ -149,14 +150,23 @@ export default function UserLeadsDetail({ userName, userIndex, cachedData, onCac
   }, [userName, onCacheUpdate]);
 
   useEffect(() => {
-    if (cachedData && Date.now() - cachedData.ts < CACHE_TTL_MS) {
+    if (cachedData) {
       setLeads(cachedData.leads);
       setStatusCounts(cachedData.statusCounts);
+    }
+    const fresh = cachedData && Date.now() - cachedData.ts < CACHE_TTL_MS;
+    const hasData = !!(cachedData?.leads?.length || Object.keys(cachedData?.statusCounts ?? {}).length);
+    if (fresh) {
       setLoading(false);
       return;
     }
-    fetchLeads();
-  }, [userName, cachedData, fetchLeads]);
+    if (hasData) {
+      setLoading(false);
+      fetchLeads(false);
+      return;
+    }
+    fetchLeads(true);
+  }, [userName, cachedData]);
 
   const userColor = getColor(userIndex);
   const sortedLeads = sortLeads(leads, dateSort);
