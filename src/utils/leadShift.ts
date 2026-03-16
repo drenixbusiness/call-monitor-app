@@ -71,7 +71,7 @@ function toUSCentral(date: Date): { hours: number; dayOfWeek: number } {
 }
 
 /** Shift hours in US Central (converted from Tashkent 7pm–4am). CDT: 9am–6pm, CST: 8am–5pm. Sat ends 4pm/3pm. */
-function getShiftHours(date: Date): { start: number; end: number } {
+export function getShiftHours(date: Date): { start: number; end: number } {
   const offset = getCentralOffsetHours(
     date.getUTCFullYear(),
     date.getUTCMonth(),
@@ -165,4 +165,20 @@ export function getLeadTiming(
   const deadline = new Date(effectiveStart.getTime() + SLA_MINUTES * 60 * 1000);
 
   return dateContacted.getTime() <= deadline.getTime() ? 'On time' : 'Late';
+}
+
+/**
+ * Get shift window (8am–5pm US Central) for a given date as ISO strings.
+ * Used for daily report: reportDate = UTC date when cron runs at 23:00.
+ */
+export function getShiftWindowISO(reportDate: Date): { from: string; to: string } {
+  const y = reportDate.getUTCFullYear();
+  const m = reportDate.getUTCMonth();
+  const d = reportDate.getUTCDate();
+  const offset = getCentralOffsetHours(y, m, d);
+  const startHour = 8 - offset;
+  const endHour = 17 - offset;
+  const from = new Date(Date.UTC(y, m, d, startHour, 0, 0, 0));
+  const to = new Date(Date.UTC(y, m, d, endHour, 59, 59, 999));
+  return { from: from.toISOString(), to: to.toISOString() };
 }

@@ -11,23 +11,26 @@ export async function GET(request: Request) {
   }
 
   const now = new Date();
-  let cutoff: Date | null = null;
+  let dateFrom: Date | null = null;
+  let dateTo: Date | null = null;
 
   if (range === 'daily') {
-    cutoff = new Date(now);
-    cutoff.setDate(now.getDate() - 1);
+    dateFrom = new Date(now);
+    dateFrom.setDate(now.getDate() - 1);
   } else if (range === 'weekly') {
-    cutoff = new Date(now);
-    cutoff.setDate(now.getDate() - 7);
+    dateFrom = new Date(now);
+    dateFrom.setDate(now.getDate() - 7);
   } else if (range === 'monthly') {
-    cutoff = new Date(now);
-    cutoff.setMonth(now.getMonth() - 1);
+    dateFrom = new Date(now);
+    dateFrom.setMonth(now.getMonth() - 1);
   } else if (range === 'yearly') {
-    cutoff = new Date(now);
-    cutoff.setFullYear(now.getFullYear() - 1);
+    dateFrom = new Date(now);
+    dateFrom.setFullYear(now.getFullYear() - 1);
   } else if (range === 'custom') {
     const from = searchParams.get('dateFrom');
-    if (from) cutoff = new Date(from);
+    const to = searchParams.get('dateTo');
+    if (from) dateFrom = new Date(from);
+    if (to) dateTo = new Date(to);
   }
 
   const normalizeExtId = (id: string) => id.replace(/\.0$/, '');
@@ -36,14 +39,25 @@ export async function GET(request: Request) {
   try {
     let rows: any[];
 
-    if (cutoff) {
+    if (dateFrom || dateTo) {
+      const conditions: string[] = ['REPLACE(user_extension, \'.0\', \'\') = ANY($1::text[])'];
+      const params: (string | string[])[] = [normalizedIds];
+      let idx = 2;
+      if (dateFrom) {
+        conditions.push(`start_time >= $${idx}`);
+        params.push(dateFrom.toISOString());
+        idx++;
+      }
+      if (dateTo) {
+        conditions.push(`start_time <= $${idx}`);
+        params.push(dateTo.toISOString());
+      }
       const query = `
         SELECT * FROM calls 
-        WHERE REPLACE(user_extension, '.0', '') = ANY($1::text[])
-        AND start_time >= $2
+        WHERE ${conditions.join(' AND ')}
         ORDER BY start_time DESC
       `;
-      const result = await db.prepare(query).all([normalizedIds, cutoff.toISOString()]);
+      const result = await db.prepare(query).all(params as [string[], ...string[]]);
       rows = result;
     } else {
       const query = `

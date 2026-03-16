@@ -167,9 +167,15 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Invalid user. Use: Alex Chester, Fred, Ethan, Winston, Jessica' }, { status: 400 });
     }
 
+    const dateFromParam = searchParams.get('dateFrom');
+    const dateToParam = searchParams.get('dateTo');
+    const useCustomRange = dateFromParam && dateToParam;
+
     const boardNamesForDisplay = USER_BOARD_MAP[userName];
     const allBoardNames = Object.values(USER_BOARD_MAP).flat();
     const { from: monthFrom, to: monthTo } = getThisMonthRange();
+    const filterFrom = useCustomRange ? new Date(dateFromParam!) : monthFrom;
+    const filterTo = useCustomRange ? new Date(dateToParam!) : monthTo;
 
     const boardsQuery = `
       query {
@@ -312,7 +318,7 @@ export async function GET(request: Request) {
         const leadDate = leadDateParsed ?? parseDateColumn(date) ?? null;
         const createdAt = item.created_at ? new Date(item.created_at) : null;
         const dateForFilter = leadDate ?? createdAt;
-        if (dateForFilter && (dateForFilter < monthFrom || dateForFilter > monthTo)) continue;
+        if (dateForFilter && (dateForFilter < filterFrom || dateForFilter > filterTo)) continue;
 
         const displayStatus = normalizeStatus(status || '');
         const leadArrival = leadDate ?? createdAt;
