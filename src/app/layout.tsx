@@ -3,6 +3,7 @@ import { Syne, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/Providers';
 import { GlobalProvider } from '@/components/GlobalContext';
+import ReloadConfirm from '@/components/ReloadConfirm/ReloadConfirm';
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import { Analytics } from "@vercel/analytics/next"
 
@@ -31,7 +32,10 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${syne.variable} ${ibmPlexMono.variable}`}>
         <Providers>
-          <GlobalProvider>{children}</GlobalProvider>
+          <GlobalProvider>
+            <ReloadConfirm />
+            {children}
+          </GlobalProvider>
         </Providers>
         <div className="glow-orb top-left" />
         <div className="glow-orb bottom-right" />
