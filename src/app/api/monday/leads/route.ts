@@ -125,7 +125,7 @@ function normalizeStatus(raw: string): string {
   return 'Other';
 }
 
-import { getLeadTiming, parseAsUSCentral, type LeadTimingResult } from '@/utils/leadShift';
+import { getLeadTiming, getCallTimeIntervalSeconds, formatCallTimeInterval, parseAsUSCentral, type LeadTimingResult } from '@/utils/leadShift';
 
 export interface MondayLead {
   id: string;
@@ -145,8 +145,10 @@ export interface MondayLead {
   dateContact: string;
   /** Original owner (empty = board owner). Used for stats: leads count toward owner, not board. */
   ownerLead: string;
-  /** Computed: On time / Late / Pending (based on 10min SLA during shift hours) */
+  /** Computed: On time / Late / Pending (interval > 10 min during shift = Late) */
   timing: LeadTimingResult;
+  /** Call time interval from effective SLA start to date contacted (e.g. "5m 30s"). — if not contacted. */
+  callTimeInterval: string;
 }
 
 export async function GET(request: Request) {
@@ -311,8 +313,9 @@ export async function GET(request: Request) {
 
         const displayStatus = normalizeStatus(status || '');
         const leadArrival = leadDate ?? createdAt;
-        const dateContactParsed = parseDateColumn(dateContact) ?? (dateContact ? new Date(dateContact) : null);
+        const dateContactParsed = parseAsUSCentral(dateContact) ?? parseDateColumn(dateContact) ?? (dateContact ? new Date(dateContact) : null);
         const timing = getLeadTiming(leadArrival, dateContactParsed);
+        const callTimeInterval = formatCallTimeInterval(getCallTimeIntervalSeconds(leadArrival, dateContactParsed));
 
         const boardOwner = BOARD_TO_USER[board.name?.trim() || ''] || userName;
         const countingOwner = ownerLead.trim() ? ownerLead.trim() : boardOwner;
@@ -335,6 +338,7 @@ export async function GET(request: Request) {
           dateContact,
           ownerLead: ownerLead.trim(),
           timing,
+          callTimeInterval,
         };
 
         allLeads.push({ lead, boardName: board.name?.trim() || '' });

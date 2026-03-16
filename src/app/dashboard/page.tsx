@@ -14,7 +14,7 @@ import { useGlobalContext } from '@/components/GlobalContext';
 import { useRouter } from 'next/navigation';
 import { MONDAY_USERS } from '@/components/MondaySidebar/MondaySidebar';
 
-const WHITELIST = ['Ethan Parker', 'Fred Royce'];
+const WHITELIST = ['Ethan Parker', 'Fred Royce', 'Tony Safety Department'];
 const WHITELIST2 = ['Winston Smith', 'Alex Chester', 'Henry Safety Department', 'Jessica Miller'];
 const ALL_WHITELIST = [...WHITELIST, ...WHITELIST2];
 

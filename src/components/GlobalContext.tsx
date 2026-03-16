@@ -73,7 +73,7 @@ export function useGlobalContext() {
   return context;
 }
 
-const WHITELIST1 = ['Ethan Parker', 'Fred Royce'];
+const WHITELIST1 = ['Ethan Parker', 'Fred Royce', 'Tony Safety Department'];
 const WHITELIST2 = ['Winston Smith', 'Alex Chester', 'Henry Safety Department', 'Jessica Miller'];
 
 /** RingCentral max perPage for call-log; use 1000 to avoid truncating users with 100+ calls */

@@ -81,8 +81,10 @@ export interface MondayLead {
   dateContact: string;
   /** Original owner (empty = board owner). Shown in table. */
   ownerLead?: string;
-  /** On time / Late / Pending (10min SLA during shift) */
+  /** On time / Late / Pending (interval > 10 min during shift = Late) */
   timing?: 'On time' | 'Late' | 'Pending';
+  /** Call time interval (e.g. "5m 30s"). — if not contacted. */
+  callTimeInterval?: string;
 }
 
 /** Cache TTL: 30 min (like Dashboard - avoid refetch on every visit) */
@@ -425,6 +427,7 @@ export default function UserLeadsDetail({ userName, userIndex, cachedData, onCac
                 <TableCell sx={{ color: '#fff', fontWeight: 600, minWidth: 130 }}>Number</TableCell>
                 <TableCell sx={{ color: '#fff', fontWeight: 600, minWidth: 180 }}>Email</TableCell>
                 <TableCell sx={{ color: '#fff', fontWeight: 600, minWidth: 120 }}>Date contact</TableCell>
+                <TableCell sx={{ color: '#fff', fontWeight: 600, minWidth: 110 }}>Call time interval</TableCell>
                 <TableCell sx={{ color: '#fff', fontWeight: 600, minWidth: 100 }}>Owner lead</TableCell>
                 <TableCell sx={{ color: '#fff', fontWeight: 600, minWidth: 110 }}>Late / On time</TableCell>
                 <TableCell sx={{ color: '#fff', fontWeight: 600, minWidth: 200 }}>Note</TableCell>
@@ -456,6 +459,9 @@ export default function UserLeadsDetail({ userName, userIndex, cachedData, onCac
                   <TableCell sx={{ color: '#fff', fontFamily: 'var(--font-mono)' }}>{lead.number}</TableCell>
                   <TableCell sx={{ color: '#fff' }}>{lead.email}</TableCell>
                   <TableCell sx={{ color: '#fff' }}>{lead.dateContact}</TableCell>
+                  <TableCell sx={{ color: '#fff', fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}>
+                    {lead.callTimeInterval ?? '—'}
+                  </TableCell>
                   <TableCell sx={{ color: '#fff', fontSize: '0.85rem' }}>
                     {lead.ownerLead || '—'}
                   </TableCell>

@@ -1,7 +1,6 @@
 'use client';
 
 import { AppBar, Toolbar, Box, Typography, Chip, Button } from '@mui/material';
-import { fmtDate } from '@/utils/helpers';
 import { useEffect, useState } from 'react';
 
 export default function Header({ status }: { status: 'idle' | 'connected' | 'error' }) {
@@ -20,6 +19,7 @@ export default function Header({ status }: { status: 'idle' | 'connected' | 'err
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
+      timeZone: 'America/Chicago',
     });
     setTime(fmt());
     const interval = setInterval(() => setTime(fmt()), 60000);
