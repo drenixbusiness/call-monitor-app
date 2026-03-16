@@ -1,16 +1,15 @@
 import type { Metadata } from 'next';
-import { Syne, IBM_Plex_Mono } from 'next/font/google';
+import { IBM_Plex_Mono } from 'next/font/google';
+import '@fontsource/google-sans/400.css';
+import '@fontsource/google-sans/500.css';
+import '@fontsource/google-sans/600.css';
+import '@fontsource/google-sans/700.css';
 import './globals.css';
 import { Providers } from '@/components/Providers';
 import { GlobalProvider } from '@/components/GlobalContext';
 import ReloadConfirm from '@/components/ReloadConfirm/ReloadConfirm';
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import { Analytics } from "@vercel/analytics/next"
-
-const syne = Syne({
-  subsets: ['latin'],
-  variable: '--font-syne',
-});
 
 const ibmPlexMono = IBM_Plex_Mono({
   weight: ['400', '500', '600', '700'],
@@ -30,7 +29,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${syne.variable} ${ibmPlexMono.variable}`}>
+      <body className={ibmPlexMono.variable}>
         <Providers>
           <GlobalProvider>
             <ReloadConfirm />

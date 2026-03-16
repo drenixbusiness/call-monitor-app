@@ -66,7 +66,7 @@ export function DonutChart({ data, width = 200, height = 200 }: DonutChartProps)
           x={centerX}
           y={centerY - 10}
           textAnchor="middle"
-          fontSize="16"
+          fontSize="18"
           fontWeight="bold"
           fill="#dde2f0"
         >
@@ -76,7 +76,7 @@ export function DonutChart({ data, width = 200, height = 200 }: DonutChartProps)
           x={centerX}
           y={centerY + 10}
           textAnchor="middle"
-          fontSize="12"
+          fontSize="14"
           fill="#8892b0"
         >
           Total Calls
@@ -86,7 +86,7 @@ export function DonutChart({ data, width = 200, height = 200 }: DonutChartProps)
         {data.map((item, index) => (
           <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
             <Box sx={{ width: 12, height: 12, backgroundColor: item.color, mr: 1, borderRadius: 1 }} />
-            <Typography sx={{ fontSize: '0.75rem', color: '#8892b0' }}>
+            <Typography sx={{ fontSize: '0.85rem', color: '#8892b0' }}>
               {item.label}: {item.value}
             </Typography>
           </Box>

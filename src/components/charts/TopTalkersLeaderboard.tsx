@@ -41,7 +41,7 @@ export function TopTalkersLeaderboard() {
               {index + 1}.
             </Typography>
             <ListItemAvatar sx={{ minWidth: 40 }}>
-              <Avatar sx={{ width: 32, height: 32, bgcolor: stat.color, fontSize: '0.875rem' }}>
+              <Avatar sx={{ width: 32, height: 32, bgcolor: stat.color, fontSize: '0.95rem' }}>
                 {stat.user.name.split(' ').map(n => n[0]).join('')}
               </Avatar>
             </ListItemAvatar>

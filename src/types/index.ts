@@ -18,5 +18,5 @@ export interface CallRecord {
 }
   
 export interface UserCalls {
-    [userId: number]: CallRecord[];
+    [userId: string | number]: CallRecord[];
 }

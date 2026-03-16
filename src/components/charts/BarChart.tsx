@@ -47,7 +47,7 @@ export function BarChart({ data, width = 300, height = 200 }: BarChartProps) {
                 x={x + barWidth / 2}
                 y={y - 5}
                 textAnchor="middle"
-                fontSize="12"
+                fontSize="14"
                 fill="#8892b0"
               >
                 {item.value}
@@ -63,7 +63,7 @@ export function BarChart({ data, width = 300, height = 200 }: BarChartProps) {
               x={x}
               y={height - 5}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="12"
               fill="#8892b0"
             >
               {item.label.split(' ')[0]}

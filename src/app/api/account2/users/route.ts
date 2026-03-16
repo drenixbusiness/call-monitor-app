@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-
-const WHITELIST2 = ['Winston Smith', 'Alex Chester', 'Henry Safety Department', 'Jessica Miller'];
+import { WHITELIST_ACCOUNT2 } from '@/lib/whitelist';
 
 /** Normalize name for flexible matching (case, extra spaces, "Last, First" format) */
 function normalizeName(name: string): string {
@@ -10,7 +9,7 @@ function normalizeName(name: string): string {
 /** Build set of normalized name variants: "Jessica Miller" -> {"jessica miller", "miller jessica"} */
 function buildWhitelistSet(): Set<string> {
   const set = new Set<string>();
-  for (const name of WHITELIST2) {
+  for (const name of WHITELIST_ACCOUNT2) {
     const n = normalizeName(name);
     set.add(n);
     const parts = n.split(/\s+/);

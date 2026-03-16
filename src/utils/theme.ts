@@ -25,7 +25,7 @@ export const theme = createTheme({
     },
   },
   typography: {
-    fontFamily: 'var(--font-syne), sans-serif',
+    fontFamily: '"Google Sans", "Helvetica", "Arial", sans-serif',
   },
   components: {
     MuiCssBaseline: {
@@ -48,6 +48,8 @@ export const theme = createTheme({
         }
 
         body {
+          font-family: "Google Sans", "Helvetica", "Arial", sans-serif;
+          font-size: 17px;
           background-color: var(--bg);
           color: var(--text);
           margin: 0;

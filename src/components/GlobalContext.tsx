@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { RCUser, UserCalls, CallRecord } from '@/types';
+import { WHITELIST_ACCOUNT1 } from '@/lib/whitelist';
 
 interface GlobalDateFilter {
   preset: 'today' | 'week' | 'month' | 'all' | 'custom';
@@ -72,9 +73,6 @@ export function useGlobalContext() {
   }
   return context;
 }
-
-const WHITELIST1 = ['Ethan Parker', 'Fred Royce', 'Tony Safety Department'];
-const WHITELIST2 = ['Winston Smith', 'Alex Chester', 'Henry Safety Department', 'Jessica Miller'];
 
 /** RingCentral max perPage for call-log; use 1000 to avoid truncating users with 100+ calls */
 const CALL_LOG_PER_PAGE = 1000;
@@ -165,7 +163,7 @@ export function GlobalProvider({ children }: GlobalProviderProps) {
         { headers: { 'x-rc-auth': token } }
       );
       const usersData1 = await usersRes1.json();
-      const account1Users = (usersData1.records || []).filter((u: any) => WHITELIST1.includes(u.name));
+      const account1Users = (usersData1.records || []).filter((u: any) => WHITELIST_ACCOUNT1.includes(u.name));
 
       // Account 2 users (API paginates & uses flexible name matching - trust its result)
       const usersRes2 = await fetch('/api/account2/users');

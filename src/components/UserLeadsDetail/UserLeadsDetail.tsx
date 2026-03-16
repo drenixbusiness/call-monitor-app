@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -17,21 +17,30 @@ import {
   IconButton,
   Menu,
   MenuItem,
+  ToggleButtonGroup,
+  ToggleButton,
 } from '@mui/material';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
+import { Pie, Line } from 'react-chartjs-2';
 import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
+  Chart as ChartJS,
+  ArcElement,
   Tooltip,
-} from 'recharts';
+  Legend,
+  CategoryScale,
+  LinearScale,
+  LineElement,
+  PointElement,
+  Filler,
+} from 'chart.js';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isWithinInterval, startOfDay } from 'date-fns';
 import { getColor } from '@/utils/helpers';
+
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, LineElement, PointElement, Filler);
+ChartJS.defaults.font.family = '"Google Sans", "Helvetica", "Arial", sans-serif';
 
 const STATUS_VALUES = ['Not touched', 'Follow up', 'Rejected', 'N/A', 'Not valid lead', 'Processing'] as const;
 
@@ -98,6 +107,20 @@ interface UserLeadsDetailProps {
 }
 
 type DateSort = 'latest' | 'oldest' | 'default';
+type TimeFilter = 'today' | 'weekly' | 'this_month' | 'custom';
+
+function getTodayCentral(): string {
+  const f = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' });
+  const parts = f.formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)?.value || '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+function getLeadDateKey(lead: MondayLead): string | null {
+  const d = lead.date ? new Date(lead.date) : lead.createdAt ? new Date(lead.createdAt) : null;
+  if (!d || isNaN(d.getTime())) return null;
+  return format(d, 'yyyy-MM-dd');
+}
 
 function sortLeads(leads: MondayLead[], sort: DateSort): MondayLead[] {
   if (sort === 'default') {
@@ -129,6 +152,73 @@ export default function UserLeadsDetail({ userName, userIndex, cachedData, onCac
     setDateSort(value);
     handleSortMenuClose();
   };
+
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('this_month');
+  const now = useMemo(() => new Date(), []);
+  const thisMonthStart = useMemo(() => startOfMonth(now), [now]);
+  const thisMonthEnd = useMemo(() => endOfMonth(now), [now]);
+  const [customFrom, setCustomFrom] = useState<Date | null>(thisMonthStart);
+  const [customTo, setCustomTo] = useState<Date | null>(thisMonthEnd);
+
+  const filteredLeads = useMemo(() => {
+    const todayCentral = getTodayCentral();
+    const weekAgo = format(addDays(now, -7), 'yyyy-MM-dd');
+
+    return leads.filter((lead) => {
+      const key = getLeadDateKey(lead);
+      if (!key) return false;
+      if (timeFilter === 'today') return key === todayCentral;
+      if (timeFilter === 'weekly') return key >= weekAgo && key <= todayCentral;
+      if (timeFilter === 'this_month') return true;
+      if (timeFilter === 'custom' && customFrom && customTo) {
+        const leadDate = lead.date ? new Date(lead.date) : lead.createdAt ? new Date(lead.createdAt) : null;
+        if (!leadDate || isNaN(leadDate.getTime())) return false;
+        return isWithinInterval(leadDate, { start: startOfDay(customFrom), end: customTo });
+      }
+      return true;
+    });
+  }, [leads, timeFilter, customFrom, customTo, now]);
+
+  const filteredStatusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    filteredLeads.forEach((lead) => {
+      const s = normalizeStatusForDisplay(lead.status);
+      counts[s] = (counts[s] || 0) + 1;
+    });
+    return counts;
+  }, [filteredLeads]);
+
+  const lineChartData = useMemo(() => {
+    const todayCentral = getTodayCentral();
+    const weekAgo = addDays(now, -7);
+    let days: Date[] = [];
+    if (timeFilter === 'today') {
+      days = [now];
+    } else if (timeFilter === 'weekly') {
+      days = eachDayOfInterval({ start: weekAgo, end: now });
+    } else if (timeFilter === 'this_month') {
+      days = eachDayOfInterval({ start: thisMonthStart, end: thisMonthEnd });
+    } else if (timeFilter === 'custom' && customFrom && customTo) {
+      days = eachDayOfInterval({ start: customFrom, end: customTo });
+    }
+    const buckets: { label: string; onTime: number; late: number }[] = days.map((d) => ({
+      label: format(d, 'MMM d'),
+      onTime: 0,
+      late: 0,
+    }));
+    const keyToIndex: Record<string, number> = {};
+    days.forEach((d, i) => {
+      keyToIndex[format(d, 'yyyy-MM-dd')] = i;
+    });
+    filteredLeads.forEach((lead) => {
+      const key = getLeadDateKey(lead);
+      if (!key || keyToIndex[key] === undefined) return;
+      const i = keyToIndex[key];
+      if (lead.timing === 'On time') buckets[i].onTime += 1;
+      else if (lead.timing === 'Late') buckets[i].late += 1;
+    });
+    return buckets;
+  }, [filteredLeads, timeFilter, now, thisMonthStart, thisMonthEnd, customFrom, customTo]);
 
   const fetchLeads = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -171,10 +261,42 @@ export default function UserLeadsDetail({ userName, userIndex, cachedData, onCac
   }, [userName, cachedData]);
 
   const userColor = getColor(userIndex);
-  const sortedLeads = sortLeads(leads, dateSort);
-  const chartData = Object.entries(statusCounts)
+  const sortedLeads = sortLeads(filteredLeads, dateSort);
+  const chartData = Object.entries(filteredStatusCounts)
     .filter(([, v]) => v > 0)
     .map(([name, value]) => ({ name, value }));
+
+  const pieData = {
+    labels: chartData.map((d) => d.name),
+    datasets: [{
+      data: chartData.map((d) => d.value),
+      backgroundColor: chartData.map((d) => getStatusColor(d.name)),
+      borderColor: 'rgba(0,0,0,0.2)',
+      borderWidth: 1,
+    }],
+  };
+
+  const lineData = {
+    labels: lineChartData.map((d) => d.label),
+    datasets: [
+      { label: 'On time', data: lineChartData.map((d) => d.onTime), borderColor: '#00C875', backgroundColor: 'rgba(0,200,117,0.1)', fill: true, tension: 0.3 },
+      { label: 'Late', data: lineChartData.map((d) => d.late), borderColor: '#E2445C', backgroundColor: 'rgba(226,68,92,0.1)', fill: true, tension: 0.3 },
+    ],
+  };
+
+  const toggleSx = {
+    backgroundColor: 'var(--surface2)',
+    '& .MuiToggleButton-root': {
+      color: 'var(--text2)',
+      border: '1px solid var(--border2)',
+      textTransform: 'none',
+      fontWeight: 600,
+      fontSize: '0.95rem',
+      px: 2,
+      py: 0.5,
+      '&.Mui-selected': { color: '#fff', backgroundColor: 'var(--surface3)' },
+    },
+  };
 
   if (loading) {
     return (
@@ -211,28 +333,79 @@ export default function UserLeadsDetail({ userName, userIndex, cachedData, onCac
         >
           {userName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
         </Avatar>
-        <Box>
+        <Box sx={{ flex: 1 }}>
           <Typography variant="h5" sx={{ fontWeight: 700, color: 'var(--text)' }}>
             {userName}
           </Typography>
-          <Typography sx={{ fontSize: '0.9rem', color: 'var(--text2)' }}>
-            This month&apos;s leads: {leads.length} in table
-            {Object.values(statusCounts).reduce((a, b) => a + b, 0) !== leads.length && (
-              <> · {Object.values(statusCounts).reduce((a, b) => a + b, 0)} counted (by owner)</>
-            )}
-            {leads.some((l) => l.timing) && (
+          <Typography sx={{ fontSize: '1rem', color: 'var(--text2)' }}>
+            {timeFilter === 'today' ? 'Today' : timeFilter === 'weekly' ? 'Last 7 days' : timeFilter === 'this_month' ? 'This month' : 'Custom range'}: {filteredLeads.length} leads
+            {filteredLeads.some((l) => l.timing) && (
               <>
                 {' · '}
                 <Box component="span" sx={{ color: '#00C875' }}>
-                  {leads.filter((l) => l.timing === 'On time').length} on time
+                  {filteredLeads.filter((l) => l.timing === 'On time').length} on time
                 </Box>
                 {' · '}
                 <Box component="span" sx={{ color: '#E2445C' }}>
-                  {leads.filter((l) => l.timing === 'Late').length} late
+                  {filteredLeads.filter((l) => l.timing === 'Late').length} late
                 </Box>
               </>
             )}
           </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+          <ToggleButtonGroup
+            value={timeFilter}
+            exclusive
+            onChange={(_, v) => v && setTimeFilter(v)}
+            size="small"
+            sx={toggleSx}
+          >
+            <ToggleButton value="today">Today</ToggleButton>
+            <ToggleButton value="weekly">Weekly</ToggleButton>
+            <ToggleButton value="this_month">This month</ToggleButton>
+            <ToggleButton value="custom">Custom</ToggleButton>
+          </ToggleButtonGroup>
+          {timeFilter === 'custom' && (
+            <LocalizationProvider dateAdapter={AdapterDateFns}>
+              <DatePicker
+                label="From"
+                value={customFrom}
+                onChange={(d) => setCustomFrom(d)}
+                minDate={thisMonthStart}
+                maxDate={customTo ?? thisMonthEnd}
+                slotProps={{
+                  textField: {
+                    size: 'small',
+                    sx: {
+                      width: 140,
+                      '& .MuiOutlinedInput-root': { color: 'var(--text)', '& fieldset': { borderColor: 'var(--border2)' } },
+                      '& .MuiInputLabel-root': { color: 'var(--text2)' },
+                      '& .MuiSvgIcon-root': { color: 'var(--text2)' },
+                    },
+                  },
+                }}
+              />
+              <DatePicker
+                label="To"
+                value={customTo}
+                onChange={(d) => setCustomTo(d)}
+                minDate={customFrom ?? thisMonthStart}
+                maxDate={thisMonthEnd}
+                slotProps={{
+                  textField: {
+                    size: 'small',
+                    sx: {
+                      width: 140,
+                      '& .MuiOutlinedInput-root': { color: 'var(--text)', '& fieldset': { borderColor: 'var(--border2)' } },
+                      '& .MuiInputLabel-root': { color: 'var(--text2)' },
+                      '& .MuiSvgIcon-root': { color: 'var(--text2)' },
+                    },
+                  },
+                }}
+              />
+            </LocalizationProvider>
+          )}
         </Box>
       </Box>
 
@@ -244,53 +417,23 @@ export default function UserLeadsDetail({ userName, userIndex, cachedData, onCac
             border: '1px solid var(--border)',
             borderRadius: 3,
             p: 3,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
           }}
         >
-          <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', mb: 2 }}>
+          <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text2)' }}>
             Lead count by status
           </Typography>
           {chartData.length > 0 ? (
-            <Box sx={{ height: 260 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={chartData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={95}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {chartData.map((entry, i) => (
-                      <Cell key={i} fill={getStatusColor(entry.name)} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      background: '#1e2436',
-                      border: '1px solid #2d3548',
-                      borderRadius: 8,
-                      color: '#fff',
-                    }}
-                    formatter={(val: number) => [val, '']}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+            <Box sx={{ flex: 1, maxHeight: 500, minHeight: 400, margin: '0 auto' }}>
+              <Pie data={pieData} options={{ plugins: { legend: { labels: { color: '#ffffff', boxWidth: 16, font: { size: 14 } } }, tooltip: { bodyColor: '#ffffff', titleColor: '#ffffff', bodyFont: { size: 14 }, titleFont: { size: 15 } } } }} />
             </Box>
           ) : (
             <Box sx={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)' }}>
-              No leads this month
+              No leads in selected range
             </Box>
           )}
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, justifyContent: 'center', mt: 2 }}>
-            {chartData.map((d) => (
-              <Typography key={d.name} sx={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 0.5, color: '#fff' }}>
-                <Box component="span" sx={{ width: 8, height: 8, borderRadius: 1, bgcolor: getStatusColor(d.name) }} />
-                {d.name}: {d.value}
-              </Typography>
-            ))}
-          </Box>
         </Box>
 
         <Box
@@ -301,35 +444,26 @@ export default function UserLeadsDetail({ userName, userIndex, cachedData, onCac
             p: 3,
           }}
         >
-          <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', mb: 2 }}>
-            Status breakdown (bar)
+          <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: '#fff', mb: 2 }}>
+            Late vs On time over time
           </Typography>
-          {chartData.length > 0 ? (
-            <Box sx={{ height: 260 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#2d3548" />
-                  <XAxis dataKey="name" stroke="#9ca3af" tick={{ fill: '#fff', fontSize: 11 }} />
-                  <YAxis stroke="#9ca3af" tick={{ fill: '#fff', fontSize: 11 }} />
-                  <Tooltip
-                    contentStyle={{
-                      background: '#1e2436',
-                      border: '1px solid #2d3548',
-                      borderRadius: 8,
-                      color: '#fff',
-                    }}
-                  />
-                  <Bar dataKey="value" radius={[4, 4, 0, 0]} name="Leads">
-                    {chartData.map((entry, i) => (
-                      <Cell key={i} fill={getStatusColor(entry.name)} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+          {lineChartData.length > 0 ? (
+            <Box sx={{ height: 360 }}>
+              <Line
+                data={lineData}
+                options={{
+                  responsive: true,
+                  plugins: { legend: { labels: { color: '#ffffff', font: { size: 14 } } }, tooltip: { bodyColor: '#ffffff', titleColor: '#ffffff', bodyFont: { size: 14 }, titleFont: { size: 15 } } },
+                  scales: {
+                    x: { ticks: { color: '#ffffff', maxRotation: 45, font: { size: 13 } }, grid: { color: 'var(--border2)' } },
+                    y: { ticks: { color: '#ffffff', font: { size: 13 } }, grid: { color: 'var(--border2)' } },
+                  },
+                }}
+              />
             </Box>
           ) : (
             <Box sx={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)' }}>
-              No leads this month
+              No leads in selected range
             </Box>
           )}
         </Box>
@@ -337,8 +471,8 @@ export default function UserLeadsDetail({ userName, userIndex, cachedData, onCac
 
       {/* Table */}
       <Box sx={{ flex: 1, minHeight: 0, pb: 8 }}>
-        <Typography sx={{ fontSize: '0.9rem', fontWeight: 600, color: '#fff', mb: 2 }}>
-          Leads table ({leads.length} rows)
+        <Typography sx={{ fontSize: '1rem', fontWeight: 600, color: '#fff', mb: 2 }}>
+          Leads table ({filteredLeads.length} rows)
         </Typography>
         <TableContainer
           component={Paper}
@@ -401,21 +535,21 @@ export default function UserLeadsDetail({ userName, userIndex, cachedData, onCac
                       <MenuItem
                         onClick={() => handleSortSelect('latest')}
                         selected={dateSort === 'latest'}
-                        sx={{ color: 'var(--text)', fontSize: '0.85rem' }}
+                        sx={{ color: 'var(--text)', fontSize: '0.95rem' }}
                       >
                         Latest first
                       </MenuItem>
                       <MenuItem
                         onClick={() => handleSortSelect('oldest')}
                         selected={dateSort === 'oldest'}
-                        sx={{ color: 'var(--text)', fontSize: '0.85rem' }}
+                        sx={{ color: 'var(--text)', fontSize: '0.95rem' }}
                       >
                         Oldest first
                       </MenuItem>
                       <MenuItem
                         onClick={() => handleSortSelect('default')}
                         selected={dateSort === 'default'}
-                        sx={{ color: 'var(--text)', fontSize: '0.85rem' }}
+                        sx={{ color: 'var(--text)', fontSize: '0.95rem' }}
                       >
                         Last contacted
                       </MenuItem>
@@ -445,7 +579,7 @@ export default function UserLeadsDetail({ userName, userIndex, cachedData, onCac
                         px: 1,
                         py: 0.25,
                         borderRadius: 1,
-                        fontSize: '0.75rem',
+                        fontSize: '0.95rem',
                         bgcolor: `${getStatusColor(normalizeStatusForDisplay(lead.status))}33`,
                         color: getStatusColor(normalizeStatusForDisplay(lead.status)),
                       }}
@@ -459,10 +593,10 @@ export default function UserLeadsDetail({ userName, userIndex, cachedData, onCac
                   <TableCell sx={{ color: '#fff', fontFamily: 'var(--font-mono)' }}>{lead.number}</TableCell>
                   <TableCell sx={{ color: '#fff' }}>{lead.email}</TableCell>
                   <TableCell sx={{ color: '#fff' }}>{lead.dateContact}</TableCell>
-                  <TableCell sx={{ color: '#fff', fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}>
+                  <TableCell sx={{ color: '#fff', fontFamily: 'var(--font-mono)', fontSize: '0.95rem' }}>
                     {lead.callTimeInterval ?? '—'}
                   </TableCell>
-                  <TableCell sx={{ color: '#fff', fontSize: '0.85rem' }}>
+                  <TableCell sx={{ color: '#fff', fontSize: '0.95rem' }}>
                     {lead.ownerLead || '—'}
                   </TableCell>
                   <TableCell>
@@ -472,7 +606,7 @@ export default function UserLeadsDetail({ userName, userIndex, cachedData, onCac
                         px: 1,
                         py: 0.25,
                         borderRadius: 1,
-                        fontSize: '0.75rem',
+                        fontSize: '0.95rem',
                         fontWeight: 600,
                         bgcolor:
                           lead.timing === 'On time'

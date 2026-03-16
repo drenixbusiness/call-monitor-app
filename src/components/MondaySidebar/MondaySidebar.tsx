@@ -37,10 +37,10 @@ export default function MondaySidebar({ selectedUser, onSelectUser }: MondaySide
       }}
     >
       <Box sx={{ p: 2, borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text2)' }}>
+        <Typography sx={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text2)' }}>
           USERS
         </Typography>
-        <Typography sx={{ fontSize: '0.75rem', color: 'var(--text3)' }}>
+        <Typography sx={{ fontSize: '0.85rem', color: 'var(--text3)' }}>
           Click to view this month&apos;s leads
         </Typography>
       </Box>
@@ -71,7 +71,7 @@ export default function MondaySidebar({ selectedUser, onSelectUser }: MondaySide
                     bgcolor: getColor(index),
                     width: 36,
                     height: 36,
-                    fontSize: '0.9rem',
+                    fontSize: '1rem',
                     fontWeight: 600,
                     color: '#fff',
                   }}
@@ -82,7 +82,7 @@ export default function MondaySidebar({ selectedUser, onSelectUser }: MondaySide
                   noWrap
                   sx={{
                     fontWeight: 700,
-                    fontSize: '0.9rem',
+                    fontSize: '1rem',
                     color: isActive ? 'var(--accent)' : 'var(--text)',
                   }}
                 >

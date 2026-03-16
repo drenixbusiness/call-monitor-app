@@ -78,7 +78,7 @@ export function LineChart({ data, colors, width = 400, height = 200 }: LineChart
             x={getX(index)}
             y={height - 10}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="12"
             fill="#8892b0"
           >
             {new Date(point.date).toLocaleDateString()}
@@ -90,7 +90,7 @@ export function LineChart({ data, colors, width = 400, height = 200 }: LineChart
             x={10}
             y={getY(value) + 4}
             textAnchor="start"
-            fontSize="10"
+            fontSize="12"
             fill="#8892b0"
           >
             {Math.round(value)}

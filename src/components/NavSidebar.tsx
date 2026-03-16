@@ -48,7 +48,7 @@ export default function NavSidebar() {
       }}
     >
       <Box sx={{ p: 2, borderBottom: '1px solid #1e2436' }}>
-        <Typography variant="h6" sx={{ color: '#dde2f0', fontFamily: 'Syne', fontWeight: 'bold' }}>
+        <Typography variant="h6" sx={{ color: '#dde2f0', fontFamily: 'inherit', fontWeight: 'bold' }}>
           RingCentral Monitor
         </Typography>
       </Box>
@@ -72,7 +72,7 @@ export default function NavSidebar() {
             sx={{
               '& .MuiListItemText-primary': {
                 color: '#dde2f0',
-                fontFamily: 'Syne',
+                fontFamily: 'inherit',
               },
             }}
           />
@@ -95,7 +95,7 @@ export default function NavSidebar() {
             sx={{
               '& .MuiListItemText-primary': {
                 color: '#dde2f0',
-                fontFamily: 'Syne',
+                fontFamily: 'inherit',
               },
             }}
           />
@@ -117,7 +117,7 @@ export default function NavSidebar() {
                 height: 40,
                 bgcolor: avatarColors[index % avatarColors.length],
                 cursor: 'pointer',
-                fontSize: '0.875rem',
+                fontSize: '0.95rem',
                 fontWeight: 'bold',
               }}
               onClick={() => handleUserClick(user)}

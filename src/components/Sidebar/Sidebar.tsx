@@ -82,13 +82,13 @@ export default function Sidebar({
         >
           <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 2 }}>
             <Avatar sx={{ bgcolor: 'var(--surface3)', width: 36, height: 36, borderRadius: 2 }}>
-              <DashboardIcon sx={{ fontSize: '1.1rem', color: activeView === 'overview' ? 'var(--accent)' : 'var(--text2)' }} />
+              <DashboardIcon sx={{ fontSize: '1.2rem', color: activeView === 'overview' ? 'var(--accent)' : 'var(--text2)' }} />
             </Avatar>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography noWrap sx={{ fontWeight: 700, fontSize: '0.9rem', color: activeView === 'overview' ? 'var(--accent)' : 'var(--text2)' }}>
+              <Typography noWrap sx={{ fontWeight: 700, fontSize: '0.95rem', color: activeView === 'overview' ? 'var(--accent)' : 'var(--text2)' }}>
                 Dashboard
               </Typography>
-              <Typography noWrap sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text3)' }}>
+              <Typography noWrap sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--text3)' }}>
                 Overview
               </Typography>
             </Box>
@@ -114,13 +114,13 @@ export default function Sidebar({
           >
             <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 2 }}>
               <Avatar sx={{ bgcolor: 'var(--surface3)', width: 36, height: 36, borderRadius: 2 }}>
-                <BarChartIcon sx={{ fontSize: '1.1rem', color: activeView === 'monday-leads' ? 'var(--accent)' : 'var(--text2)' }} />
+                <BarChartIcon sx={{ fontSize: '1.2rem', color: activeView === 'monday-leads' ? 'var(--accent)' : 'var(--text2)' }} />
               </Avatar>
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography noWrap sx={{ fontWeight: 700, fontSize: '0.9rem', color: activeView === 'monday-leads' ? 'var(--accent)' : 'var(--text2)' }}>
+                <Typography noWrap sx={{ fontWeight: 700, fontSize: '0.95rem', color: activeView === 'monday-leads' ? 'var(--accent)' : 'var(--text2)' }}>
                   Monday Leads
                 </Typography>
-                <Typography noWrap sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text3)' }}>
+                <Typography noWrap sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--text3)' }}>
                   By user
                 </Typography>
               </Box>
@@ -134,7 +134,7 @@ export default function Sidebar({
       {/* Div 2: Users section - scrollable */}
       <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Box sx={{ p: 2, borderBottom: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Typography sx={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--text2)', letterSpacing: '1px' }}>
+          <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text2)', letterSpacing: '1px' }}>
             USERS &middot; {isMondayLeads ? MONDAY_USERS.length : filteredUsers.length}
           </Typography>
           {!isMondayLeads && (
@@ -151,7 +151,7 @@ export default function Sidebar({
                   '& fieldset': { borderColor: 'var(--border2)' },
                   '&:hover fieldset': { borderColor: 'var(--text3)' },
                 },
-                input: { color: 'var(--text)', fontSize: '0.9rem' }
+                input: { color: 'var(--text)', fontSize: '0.95rem' }
               }}
               slotProps={{
                 input: {
@@ -165,7 +165,7 @@ export default function Sidebar({
             />
           )}
           {isMondayLeads && (
-            <Typography sx={{ fontSize: '0.75rem', color: 'var(--text3)' }}>
+            <Typography sx={{ fontSize: '0.85rem', color: 'var(--text3)' }}>
               Click to view this month&apos;s leads
             </Typography>
           )}
@@ -194,10 +194,10 @@ export default function Sidebar({
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 2 }}>
-                    <Avatar sx={{ bgcolor: getColor(index), width: 36, height: 36, fontSize: '0.9rem', fontWeight: 600, color: '#fff' }}>
+                    <Avatar sx={{ bgcolor: getColor(index), width: 36, height: 36, fontSize: '0.95rem', fontWeight: 600, color: '#fff' }}>
                       {user.split(' ').map((n) => n[0]).join('').slice(0, 2)}
                     </Avatar>
-                    <Typography noWrap sx={{ fontWeight: 700, fontSize: '0.9rem', color: isActive ? 'var(--accent)' : 'var(--text)' }}>
+                    <Typography noWrap sx={{ fontWeight: 700, fontSize: '0.95rem', color: isActive ? 'var(--accent)' : 'var(--text)' }}>
                       {user}
                     </Typography>
                   </Box>
@@ -234,22 +234,22 @@ export default function Sidebar({
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 2 }}>
-                    <Avatar sx={{ bgcolor: getColor(userIndex >= 0 ? userIndex : 0), width: 36, height: 36, fontSize: '0.9rem', fontWeight: 600, color: '#fff' }}>
+                    <Avatar sx={{ bgcolor: getColor(userIndex >= 0 ? userIndex : 0), width: 36, height: 36, fontSize: '0.95rem', fontWeight: 600, color: '#fff' }}>
                       {getInitials(user.name)}
                     </Avatar>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography noWrap sx={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)' }}>
+                      <Typography noWrap sx={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }}>
                         {getDisplayName(user, users)}
                       </Typography>
-                      <Typography noWrap sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text2)' }}>
+                      <Typography noWrap sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--text2)' }}>
                         {phoneNumbersString || 'No direct number'}
                       </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                      <Typography sx={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent)' }}>
+                      <Typography sx={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--accent)' }}>
                         {calls.length}
                       </Typography>
-                      <Typography sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text3)' }}>
+                      <Typography sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--text3)' }}>
                         {fmtDuration(talkTime)}
                       </Typography>
                     </Box>

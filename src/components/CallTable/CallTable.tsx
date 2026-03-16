@@ -19,19 +19,19 @@ export default function CallTable({ calls, maxDuration }: { calls: CallRecord[],
     <Box sx={{ backgroundColor: 'var(--surface)', borderRadius: 3, border: '1px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1, height: '500px', minHeight: '500px' }}>
       <Box sx={{ p: 3, borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between' }}>
         <Typography sx={{ fontWeight: 700 }}>Call History</Typography>
-        <Typography sx={{ color: 'var(--text2)', fontSize: '0.85rem' }}>{calls.length} records</Typography>
+        <Typography sx={{ color: 'var(--text2)', fontSize: '0.95rem' }}>{calls.length} records</Typography>
       </Box>
 
       <Box sx={{ overflowX: 'auto', overflowY: 'auto', flex: 1 }}>
         <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <Box component="thead" sx={{ borderBottom: '1px solid var(--border2)', backgroundColor: 'var(--surface2)', position: 'sticky', top: 0, zIndex: 1 }}>
             <Box component="tr">
-              <Box component="th" sx={{ p: 2, fontSize: '0.75rem', color: 'var(--text2)', fontWeight: 600 }}>Direction</Box>
-              <Box component="th" sx={{ p: 2, fontSize: '0.75rem', color: 'var(--text2)', fontWeight: 600 }}>Number</Box>
-              <Box component="th" sx={{ p: 2, fontSize: '0.75rem', color: 'var(--text2)', fontWeight: 600 }}>Contact</Box>
-              <Box component="th" sx={{ p: 2, fontSize: '0.75rem', color: 'var(--text2)', fontWeight: 600 }}>Date & Time</Box>
-              <Box component="th" sx={{ p: 2, fontSize: '0.75rem', color: 'var(--text2)', fontWeight: 600 }}>Duration</Box>
-              <Box component="th" sx={{ p: 2, fontSize: '0.75rem', color: 'var(--text2)', fontWeight: 600 }}>Result</Box>
+              <Box component="th" sx={{ p: 2, fontSize: '0.85rem', color: 'var(--text2)', fontWeight: 600 }}>Direction</Box>
+              <Box component="th" sx={{ p: 2, fontSize: '0.85rem', color: 'var(--text2)', fontWeight: 600 }}>Number</Box>
+              <Box component="th" sx={{ p: 2, fontSize: '0.85rem', color: 'var(--text2)', fontWeight: 600 }}>Contact</Box>
+              <Box component="th" sx={{ p: 2, fontSize: '0.85rem', color: 'var(--text2)', fontWeight: 600 }}>Date & Time</Box>
+              <Box component="th" sx={{ p: 2, fontSize: '0.85rem', color: 'var(--text2)', fontWeight: 600 }}>Duration</Box>
+              <Box component="th" sx={{ p: 2, fontSize: '0.85rem', color: 'var(--text2)', fontWeight: 600 }}>Result</Box>
             </Box>
           </Box>
           <Box component="tbody">
@@ -59,7 +59,7 @@ export default function CallTable({ calls, maxDuration }: { calls: CallRecord[],
                       size="small"
                       sx={{ 
                           height: 22, 
-                          fontSize: '0.7rem', 
+                          fontSize: '0.9rem', 
                           fontWeight: 700, 
                           backgroundColor: isOutbound ? 'rgba(0, 217, 245, 0.1)' : 'rgba(155, 125, 255, 0.1)',
                           color: isOutbound ? 'var(--accent)' : 'var(--purple)',
@@ -67,13 +67,13 @@ export default function CallTable({ calls, maxDuration }: { calls: CallRecord[],
                       }} 
                     />
                   </Box>
-                  <Box component="td" sx={{ p: 2, fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}>
+                  <Box component="td" sx={{ p: 2, fontFamily: 'var(--font-mono)', fontSize: '0.95rem' }}>
                     {contactMatch?.phoneNumber || 'Unknown'}
                   </Box>
-                  <Box component="td" sx={{ p: 2, fontWeight: 600, fontSize: '0.85rem', color: 'var(--text)' }}>
+                  <Box component="td" sx={{ p: 2, fontWeight: 600, fontSize: '0.95rem', color: 'var(--text)' }}>
                     {contactMatch?.name || '—'}
                   </Box>
-                  <Box component="td" sx={{ p: 2, fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text2)' }}>
+                  <Box component="td" sx={{ p: 2, fontFamily: 'var(--font-mono)', fontSize: '0.9rem', color: 'var(--text2)' }}>
                     {fmtDate(call.startTime)}
                   </Box>
                   <Box component="td" sx={{ p: 2 }}>
@@ -87,14 +87,14 @@ export default function CallTable({ calls, maxDuration }: { calls: CallRecord[],
                             '& .MuiLinearProgress-bar': { backgroundColor: 'var(--text2)' }
                         }}
                       />
-                      <Typography sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text)' }}>
+                      <Typography sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.9rem', color: 'var(--text)' }}>
                         {fmtDuration(call.duration)}
                       </Typography>
                     </Box>
                   </Box>
                   <Box component="td" sx={{ p: 2 }}>
                     <Typography sx={{ 
-                        fontSize: '0.8rem', fontWeight: 600,
+                        fontSize: '0.9rem', fontWeight: 600,
                         color: call.result === 'Accepted' ? 'var(--green)' 
                              : call.result === 'Missed' ? 'var(--red)' 
                              : call.result === 'Voicemail' ? 'var(--yellow)' 

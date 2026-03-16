@@ -143,7 +143,7 @@ async function getTokenForAccount2(): Promise<string | null> {
 }
 
 async function getExtensionsForAccount(token: string): Promise<string[]> {
-  const WHITELIST2 = ['Winston Smith', 'Alex Chester', 'Henry Safety Department', 'Michael Cole'];
+  const { WHITELIST_ACCOUNT2 } = await import('@/lib/whitelist');
   const res = await fetch(`${RC_BASE}/v1.0/account/~/extension?type=User&status=Enabled&perPage=100&page=1`, {
     headers: { Authorization: `Bearer ${token}` }
   });
@@ -151,7 +151,7 @@ async function getExtensionsForAccount(token: string): Promise<string[]> {
   const data = await res.json();
   const records = data.records || [];
   return records
-    .filter((u: any) => WHITELIST2.includes(u.name))
+    .filter((u: any) => WHITELIST_ACCOUNT2.includes(u.name))
     .map((u: any) => String(u.id));
 }
 

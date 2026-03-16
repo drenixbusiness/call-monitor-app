@@ -64,7 +64,7 @@ export default function MiniCharts({
     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3, animation: 'fadeUp 0.6s ease-out forwards' }}>
       
       <Box sx={cardStyle}>
-        <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text2)', mb: 2 }}>
+        <Typography sx={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text2)', mb: 2 }}>
           CALLS BY DAY
         </Typography>
         <Box sx={{ flex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1, height: 100 }}>
@@ -80,7 +80,7 @@ export default function MiniCharts({
                      borderRadius: 1,
                      transition: 'height 0.3s'
                  }} />
-                 <Typography sx={{ fontSize: '0.65rem', color: 'var(--text3)' }}>
+                 <Typography sx={{ fontSize: '0.85rem', color: 'var(--text3)' }}>
                    {['S','M','T','W','T','F','S'][i]}
                  </Typography>
                </Box>
@@ -90,7 +90,7 @@ export default function MiniCharts({
       </Box>
 
       <Box sx={cardStyle}>
-        <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text2)', mb: 2 }}>
+        <Typography sx={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text2)', mb: 2 }}>
           DIRECTION SPLIT
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flex: 1 }}>
@@ -104,19 +104,19 @@ export default function MiniCharts({
             </svg>
           </Box>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-            <Typography sx={{ fontSize: '0.75rem', color: 'var(--text)' }}><Box component="span" sx={{ color: 'var(--accent)', mr: 1 }}>●</Box>{outCount} Outbound</Typography>
-            <Typography sx={{ fontSize: '0.75rem', color: 'var(--text)' }}><Box component="span" sx={{ color: 'var(--purple)', mr: 1 }}>●</Box>{inCount} Inbound</Typography>
-            <Typography sx={{ fontSize: '0.75rem', color: 'var(--text3)' }}><Box component="span" sx={{ color: 'var(--red)', mr: 1 }}>●</Box>{missedCount} Missed</Typography>
+            <Typography sx={{ fontSize: '0.85rem', color: 'var(--text)' }}><Box component="span" sx={{ color: 'var(--accent)', mr: 1 }}>●</Box>{outCount} Outbound</Typography>
+            <Typography sx={{ fontSize: '0.85rem', color: 'var(--text)' }}><Box component="span" sx={{ color: 'var(--purple)', mr: 1 }}>●</Box>{inCount} Inbound</Typography>
+            <Typography sx={{ fontSize: '0.85rem', color: 'var(--text3)' }}><Box component="span" sx={{ color: 'var(--red)', mr: 1 }}>●</Box>{missedCount} Missed</Typography>
           </Box>
         </Box>
       </Box>
 
       <Box sx={cardStyle}>
          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-           <Typography sx={{ fontSize: '1.5rem', fontWeight: 700, color }}>
+           <Typography sx={{ fontSize: '1.6rem', fontWeight: 700, color }}>
              {fmtDuration(totalTime)}
            </Typography>
-           <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text2)' }}>
+           <Typography sx={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text2)' }}>
              {calls.length} CALLS
            </Typography>
          </Box>
@@ -130,7 +130,7 @@ export default function MiniCharts({
                }} title={`${c.direction} - ${c.result}`} />
              ))}
            </Box>
-           <Typography sx={{ fontSize: '0.65rem', color: 'var(--text3)' }}>← most recent</Typography>
+           <Typography sx={{ fontSize: '0.85rem', color: 'var(--text3)' }}>← most recent</Typography>
          </Box>
       </Box>
 

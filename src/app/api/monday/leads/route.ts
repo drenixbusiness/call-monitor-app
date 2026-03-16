@@ -44,10 +44,13 @@ async function mondayGraphql(query: string, variables?: Record<string, unknown>)
   return res.json();
 }
 
+/** This month's range in US Central. Start of 1st 00:00 to end of last day 23:59:59. */
 function getThisMonthRange(): { from: Date; to: Date } {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const from = new Date(Date.UTC(y, m, 1, 6, 0, 0, 0));
+  const to = new Date(Date.UTC(y, m + 1, 1, 5, 59, 59, 999));
   return { from, to };
 }
 

@@ -67,7 +67,7 @@ export default function Header({ status }: { status: 'idle' | 'connected' | 'err
             }} />
           </Box>
 
-          <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.2rem', letterSpacing: '-0.5px' }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.3rem', letterSpacing: '-0.5px' }}>
             HR<Box component="span" sx={{ color: 'var(--accent)' }}>Monitoring</Box>
           </Typography>
 
@@ -80,7 +80,7 @@ export default function Header({ status }: { status: 'idle' | 'connected' | 'err
               height: 24,
               backgroundColor: 'var(--surface3)',
               color: 'var(--text2)',
-              fontSize: '0.75rem',
+              fontSize: '0.95rem',
               fontWeight: 600
             }}
           />
@@ -94,12 +94,12 @@ export default function Header({ status }: { status: 'idle' | 'connected' | 'err
               backgroundColor: 'var(--green)',
               animation: 'breathe 2s infinite ease-in-out'
             }} />
-            <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--green)', letterSpacing: '1px' }}>
+            <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--green)', letterSpacing: '1px' }}>
               LIVE
             </Typography>
           </Box>
 
-          <Typography sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--text2)' }}>
+          <Typography sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.95rem', color: 'var(--text2)' }}>
             {time ?? ''}
           </Typography>
 
@@ -108,7 +108,7 @@ export default function Header({ status }: { status: 'idle' | 'connected' | 'err
             onClick={handleLogout}
             sx={{
               color: 'var(--text3)',
-              fontSize: '0.7rem',
+              fontSize: '0.8rem',
               textTransform: 'none',
               fontWeight: 600,
               '&:hover': { color: 'var(--red)' }

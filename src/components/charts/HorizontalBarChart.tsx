@@ -45,7 +45,7 @@ export function HorizontalBarChart({ data, width = 300, height = 200 }: Horizont
                 x={50}
                 y={y + barHeight / 2 + 4}
                 textAnchor="end"
-                fontSize="12"
+                fontSize="14"
                 fill="#8892b0"
               >
                 {item.label}
@@ -54,7 +54,7 @@ export function HorizontalBarChart({ data, width = 300, height = 200 }: Horizont
                 x={70 + barWidth}
                 y={y + barHeight / 2 + 4}
                 textAnchor="start"
-                fontSize="12"
+                fontSize="14"
                 fill="#8892b0"
               >
                 {item.value}

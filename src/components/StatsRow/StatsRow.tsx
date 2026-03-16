@@ -78,7 +78,7 @@ export default function StatsRow({ users, allCalls }: { users: RCUser[], allCall
             gap: 1
         }}>
           <Typography sx={{ 
-              fontSize: '0.75rem', 
+              fontSize: '0.95rem', 
               fontFamily: 'var(--font-mono)', 
               color: 'var(--text2)', 
               fontWeight: 600,
@@ -87,7 +87,7 @@ export default function StatsRow({ users, allCalls }: { users: RCUser[], allCall
             {stat.label}
           </Typography>
           <Typography sx={{ 
-              fontSize: '2rem', 
+              fontSize: '2.2rem', 
               fontWeight: 700, 
               color: stat.color,
               lineHeight: 1

@@ -13,10 +13,9 @@ import { RCUser, UserCalls } from '@/types';
 import { useGlobalContext } from '@/components/GlobalContext';
 import { useRouter } from 'next/navigation';
 import { MONDAY_USERS } from '@/components/MondaySidebar/MondaySidebar';
+import { WHITELIST_ACCOUNT1, WHITELIST_ACCOUNT2 } from '@/lib/whitelist';
 
-const WHITELIST = ['Ethan Parker', 'Fred Royce', 'Tony Safety Department'];
-const WHITELIST2 = ['Winston Smith', 'Alex Chester', 'Henry Safety Department', 'Jessica Miller'];
-const ALL_WHITELIST = [...WHITELIST, ...WHITELIST2];
+const normalizeExtKey = (id: string | number) => String(id).replace(/\.0$/, '');
 
 export default function Home() {
   const { users, setUsers, allCalls, setAllCalls, selectedUser, setSelectedUser, globalDateFilter, setGlobalDateFilter } = useGlobalContext();
@@ -54,13 +53,18 @@ export default function Home() {
       const res = await fetch(`/api/calls?range=all&extensionIds=${ids}`);
       const data = await res.json();
       const newMap: UserCalls = {};
-      filteredUsers.forEach(u => newMap[u.id] = []);
+      filteredUsers.forEach(u => {
+        const key = normalizeExtKey(u.id);
+        newMap[key] = [];
+      });
       (data.records || []).forEach((c: any) => {
-        const extId = parseInt(c.extension.id);
-        if (newMap[extId] === undefined) return;
-        if (c.result === 'Missed') { newMap[extId].push(c); return; }
+        const extIdRaw = c.extension?.id;
+        if (extIdRaw == null) return;
+        const key = normalizeExtKey(extIdRaw);
+        if (newMap[key] === undefined) return;
+        if (c.result === 'Missed') { newMap[key].push(c); return; }
         if ((c.result === 'Accepted' || c.result === 'Call connected') && c.duration >= 20) {
-          newMap[extId].push(c);
+          newMap[key].push(c);
         }
       });
       setAllCalls(newMap);
@@ -100,13 +104,13 @@ export default function Home() {
           : '';
       }
 
-      const filteredAccount1 = account1Users.filter(u => WHITELIST.includes(u.name));
+      const filteredAccount1 = account1Users.filter(u => WHITELIST_ACCOUNT1.includes(u.name));
 
       const acc2Res = await fetch('/api/account2/users');
       let filteredAccount2: RCUser[] = [];
       if (acc2Res.ok) {
         const acc2Data = await acc2Res.json();
-        filteredAccount2 = (acc2Data.users || []).filter((u: RCUser) => WHITELIST2.includes(u.name));
+        filteredAccount2 = (acc2Data.users || []).filter((u: RCUser) => WHITELIST_ACCOUNT2.includes(u.name));
       }
 
       const allFilteredUsers = [...filteredAccount1, ...filteredAccount2];
@@ -207,7 +211,7 @@ export default function Home() {
       {syncPhase === 'syncing' && (
         <Box sx={{ px: 2, py: 0.5, background: 'var(--surface2)', display: 'flex', alignItems: 'center', gap: 2 }}>
           <LinearProgress sx={{ flex: 1, height: 3, borderRadius: 2, '& .MuiLinearProgress-bar': { background: 'var(--accent)' } }} />
-          <Typography sx={{ fontSize: '0.75rem', color: 'var(--text2)', whiteSpace: 'nowrap' }}>
+          <Typography sx={{ fontSize: '0.85rem', color: 'var(--text2)', whiteSpace: 'nowrap' }}>
             Fetching call history… please wait
           </Typography>
         </Box>
@@ -244,7 +248,7 @@ export default function Home() {
               {activeView !== 'monday-leads' && <StatsRow users={users} allCalls={allCalls} />}
               <Box sx={{ px: 3, pt: 2, pb: 1, display: 'flex', justifyContent: activeView === 'monday-leads' ? 'space-between' : 'flex-end', alignItems: 'center' }}>
                 {activeView === 'monday-leads' && (
-                  <Typography sx={{ fontSize: '0.9rem', color: 'var(--text2)' }}>Monday Leads · This month</Typography>
+                  <Typography sx={{ fontSize: '1rem', color: 'var(--text2)' }}>Monday Leads</Typography>
                 )}
                 <ToggleButtonGroup
                   value={activeView}
@@ -258,7 +262,7 @@ export default function Home() {
                       border: '1px solid var(--border2)',
                       textTransform: 'none',
                       fontWeight: 600,
-                      fontSize: '0.75rem',
+                      fontSize: '0.85rem',
                       px: 2,
                       py: 0.5,
                       '&.Mui-selected': {

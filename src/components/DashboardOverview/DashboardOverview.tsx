@@ -18,6 +18,7 @@ import { useGlobalContext } from '@/components/GlobalContext';
 import WaitingDashboard from './WaitingDashboard';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
+ChartJS.defaults.font.family = '"Google Sans", "Helvetica", "Arial", sans-serif';
 
 type TimeRange = 'Daily' | 'Weekly' | 'Monthly' | 'All' | 'Custom';
 
@@ -125,6 +126,19 @@ export default function DashboardOverview({
     ],
   };
 
+  const chartLabelFont = { size: 14 };
+  const chartTickFont = { size: 13 };
+  const talkTimeBarOptions = {
+    responsive: true,
+    plugins: { legend: { labels: { color: '#ffffff', font: chartLabelFont } }, tooltip: { bodyColor: '#ffffff', titleColor: '#ffffff', bodyFont: { size: 14 }, titleFont: { size: 15 } } },
+    scales: { x: { ticks: { color: '#ffffff', font: chartTickFont }, grid: { color: 'var(--border2)' } }, y: { ticks: { color: '#ffffff', font: chartTickFont }, grid: { color: 'var(--border2)' } } },
+  };
+  const directionBarOptions = {
+    responsive: true,
+    plugins: { legend: { labels: { color: '#ffffff', font: chartLabelFont } }, tooltip: { bodyColor: '#ffffff', titleColor: '#ffffff', bodyFont: { size: 14 }, titleFont: { size: 15 } } },
+    scales: { x: { stacked: true, ticks: { color: '#ffffff', font: chartTickFont }, grid: { color: 'var(--border2)' } }, y: { stacked: true, ticks: { color: '#ffffff', font: chartTickFont }, grid: { color: 'var(--border2)' } } },
+  };
+
   const toggleSx = {
     backgroundColor: 'var(--surface2)',
     '& .MuiToggleButton-root': {
@@ -132,7 +146,7 @@ export default function DashboardOverview({
       border: '1px solid var(--border2)',
       textTransform: 'none',
       fontWeight: 600,
-      fontSize: '0.75rem',
+      fontSize: '0.95rem',
       px: 2,
       py: 0.5,
       '&.Mui-selected': { color: '#fff', backgroundColor: 'var(--surface3)' },
@@ -190,8 +204,8 @@ export default function DashboardOverview({
 
             {/* Subtitle */}
             <Box>
-              <Typography sx={{ fontSize: '1.25rem', fontWeight: 700 }}>Team Call Overview</Typography>
-              <Typography sx={{ fontSize: '0.8rem', color: 'var(--text2)' }}>
+              <Typography sx={{ fontSize: '1.35rem', fontWeight: 700 }}>Team Call Overview</Typography>
+              <Typography sx={{ fontSize: '0.9rem', color: 'var(--text2)' }}>
                 {timeRange === 'All' ? 'All time' : `Last ${timeRange.toLowerCase()}`} · {totalCalls} calls · Top caller:{' '}
                 {topCaller?.name || 'N/A'} ({topCaller?.callsCount || 0} calls,{' '}
                 {fmtDuration(topCaller?.duration || 0)})
@@ -201,28 +215,28 @@ export default function DashboardOverview({
             {/* Charts row 1 */}
             <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1.8fr)', gap: 3 }}>
               <Box sx={{ backgroundColor: 'var(--surface)', borderRadius: 3, border: '1px solid var(--border)', p: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text2)' }}>
+                <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text2)' }}>
                   Calls share by user
                 </Typography>
                 <Box sx={{ flex: 1, minHeight: 0 }}>
-                  <Pie data={pieData} options={{ plugins: { legend: { labels: { color: '#ffffff', boxWidth: 16 } }, tooltip: { bodyColor: '#ffffff', titleColor: '#ffffff' } } }} />
+                  <Pie data={pieData} options={{ plugins: { legend: { labels: { color: '#ffffff', boxWidth: 16, font: { size: 14 } } }, tooltip: { bodyColor: '#ffffff', titleColor: '#ffffff', bodyFont: { size: 14 }, titleFont: { size: 15 } } } }} />
                 </Box>
               </Box>
 
               <Box sx={{ backgroundColor: 'var(--surface)', borderRadius: 3, border: '1px solid var(--border)', p: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text2)' }}>
+                <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text2)' }}>
                   Talk time by user
                 </Typography>
-                <Bar data={talkTimeBarData} options={{ responsive: true, plugins: { legend: { labels: { color: '#ffffff' } }, tooltip: { bodyColor: '#ffffff', titleColor: '#ffffff' } }, scales: { x: { ticks: { color: '#ffffff' }, grid: { color: 'var(--border2)' } }, y: { ticks: { color: '#ffffff' }, grid: { color: 'var(--border2)' } } } }} />
+                <Bar data={talkTimeBarData} options={talkTimeBarOptions} />
               </Box>
             </Box>
 
             {/* Charts row 2 */}
             <Box sx={{ backgroundColor: 'var(--surface)', borderRadius: 3, border: '1px solid var(--border)', p: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text2)' }}>
+              <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text2)' }}>
                 Inbound / outbound / missed by user
               </Typography>
-              <Bar data={directionBarData} options={{ responsive: true, plugins: { legend: { labels: { color: '#ffffff' } }, tooltip: { bodyColor: '#ffffff', titleColor: '#ffffff' } }, scales: { x: { stacked: true, ticks: { color: '#ffffff' }, grid: { color: 'var(--border2)' } }, y: { stacked: true, ticks: { color: '#ffffff' }, grid: { color: 'var(--border2)' } } } }} />
+              <Bar data={directionBarData} options={directionBarOptions} />
             </Box>
 
           </Box>

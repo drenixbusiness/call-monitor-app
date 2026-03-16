@@ -27,7 +27,7 @@ export default function UsersPage() {
           }}
           onClick={handleBannerClick}
         >
-          <Typography sx={{ color: '#8892b0', fontSize: '0.875rem' }}>
+          <Typography sx={{ color: '#8892b0', fontSize: '0.95rem' }}>
             Showing data for: {globalDateFilter.preset} · Change in Dashboard
           </Typography>
         </Box>

@@ -1,12 +1,27 @@
 'use client';
 
-import { Box, Typography, Avatar, ToggleButtonGroup, ToggleButton, TextField } from '@mui/material';
+import { Box, Typography, Avatar, ToggleButtonGroup, ToggleButton } from '@mui/material';
 import { RCUser, CallRecord } from '@/types';
 import { getInitials, getColor, getDisplayName } from '@/utils/helpers';
 import { useState, useMemo } from 'react';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  LineElement,
+  PointElement,
+  Filler,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { format, addDays, startOfDay, eachDayOfInterval } from 'date-fns';
 import MiniCharts from '../MiniCharts/MiniCharts';
 import CallTable from '../CallTable/CallTable';
 import { useGlobalContext } from '@/components/GlobalContext';
+
+ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip, Legend);
+ChartJS.defaults.font.family = '"Google Sans", "Helvetica", "Arial", sans-serif';
 
 export default function UserDetail({
   user,
@@ -68,6 +83,65 @@ export default function UserDetail({
     return Math.max(...filteredCalls.map(c => c.duration));
   }, [filteredCalls]);
 
+  const [missedChartFilter, setMissedChartFilter] = useState<'today' | 'week' | 'month' | 'custom'>('week');
+  const missedCallsForChart = useMemo(() => {
+    const missed = calls.filter(c => c.result === 'Missed');
+    const now = new Date();
+    if (missedChartFilter === 'today') {
+      const todayStart = startOfDay(now);
+      return missed.filter(c => new Date(c.startTime) >= todayStart);
+    }
+    if (missedChartFilter === 'week') {
+      const weekAgo = addDays(now, -7);
+      return missed.filter(c => new Date(c.startTime) >= weekAgo);
+    }
+    if (missedChartFilter === 'month') {
+      const monthAgo = addDays(now, -30);
+      return missed.filter(c => new Date(c.startTime) >= monthAgo);
+    }
+    const last500 = calls.slice(-500);
+    return last500.filter(c => c.result === 'Missed');
+  }, [calls, missedChartFilter]);
+
+  const missedLineData = useMemo(() => {
+    const now = new Date();
+    let days: Date[] = [];
+    if (missedChartFilter === 'today') {
+      days = Array.from({ length: 24 }, (_, i) => {
+        const d = new Date(now);
+        d.setHours(i, 0, 0, 0);
+        return d;
+      });
+    } else if (missedChartFilter === 'week') {
+      days = eachDayOfInterval({ start: addDays(now, -7), end: now });
+    } else if (missedChartFilter === 'month') {
+      days = eachDayOfInterval({ start: addDays(now, -30), end: now });
+    } else {
+      const last500 = calls.slice(-500);
+      if (last500.length === 0) return { labels: [] as string[], data: [] as number[] };
+      const minDate = startOfDay(new Date(last500[0].startTime));
+      const maxDate = new Date(last500[last500.length - 1].startTime);
+      days = eachDayOfInterval({ start: minDate, end: maxDate });
+    }
+    const buckets: { label: string; count: number }[] = days.map((d) => ({
+      label: missedChartFilter === 'today' ? `${d.getHours()}:00` : format(d, 'MMM d'),
+      count: 0,
+    }));
+    const keyToIndex: Record<string, number> = {};
+    days.forEach((d, i) => {
+      keyToIndex[missedChartFilter === 'today' ? String(d.getHours()) : format(d, 'yyyy-MM-dd')] = i;
+    });
+    missedCallsForChart.forEach((c) => {
+      const d = new Date(c.startTime);
+      const key = missedChartFilter === 'today' ? String(d.getHours()) : format(d, 'yyyy-MM-dd');
+      if (keyToIndex[key] !== undefined) buckets[keyToIndex[key]].count += 1;
+    });
+    return {
+      labels: buckets.map((b) => b.label),
+      data: buckets.map((b) => b.count),
+    };
+  }, [missedCallsForChart, missedChartFilter, calls]);
+
   const handleFilterChange = (event: React.MouseEvent<HTMLElement>, newFilter: typeof activeFilter) => {
     if (newFilter !== null) setActiveFilter(newFilter);
   };
@@ -90,10 +164,10 @@ export default function UserDetail({
               {getDisplayName(user, users)}
             </Typography>
             <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-              <Typography sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--text2)' }}>
+              <Typography sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.95rem', color: 'var(--text2)' }}>
                 {phoneNumbersString}
               </Typography>
-              <Typography sx={{ fontSize: '0.85rem', color: 'var(--text3)' }}>
+              <Typography sx={{ fontSize: '0.95rem', color: 'var(--text3)' }}>
                 Ext {user.extensionNumber} &middot; {user.contact?.department || 'Unknown Dept'}
               </Typography>
             </Box>
@@ -134,6 +208,79 @@ export default function UserDetail({
       </Box>
 
       <MiniCharts user={user} calls={filteredCalls} userIndex={userIndex} color={userColor} />
+
+      <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+        <Box sx={{ width: '100%', maxWidth: '100%', backgroundColor: 'var(--surface)', borderRadius: 3, border: '1px solid var(--border)', p: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+            <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text2)' }}>
+              Missed calls over time
+            </Typography>
+            <ToggleButtonGroup
+              value={missedChartFilter}
+              exclusive
+              onChange={(_, v) => v && setMissedChartFilter(v)}
+              size="small"
+              sx={{
+                backgroundColor: 'var(--surface2)',
+                '& .MuiToggleButton-root': {
+                  color: 'var(--text2)',
+                  border: '1px solid var(--border2)',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  px: 2,
+                  py: 0.5,
+                  '&.Mui-selected': { color: '#fff', backgroundColor: 'var(--surface3)' },
+                },
+              }}
+            >
+              <ToggleButton value="today">Today</ToggleButton>
+              <ToggleButton value="week">Week</ToggleButton>
+              <ToggleButton value="month">Month</ToggleButton>
+              <ToggleButton value="custom">Custom (last 500)</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+          {missedLineData.labels.length > 0 ? (
+            <Box sx={{ height: 220, width: '100%' }}>
+              <Line
+                data={{
+                  labels: missedLineData.labels,
+                  datasets: [{
+                    label: 'Missed',
+                    data: missedLineData.data,
+                    borderColor: '#ff4566',
+                    backgroundColor: 'rgba(255, 69, 102, 0.15)',
+                    fill: true,
+                    tension: 0.3,
+                  }],
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { labels: { color: '#ffffff', font: { size: 14 } } },
+                    tooltip: { bodyColor: '#ffffff', titleColor: '#ffffff', bodyFont: { size: 14 }, titleFont: { size: 15 } },
+                  },
+                  scales: {
+                    x: {
+                      ticks: { color: '#ffffff', font: { size: 13 }, maxRotation: 45 },
+                      grid: { color: 'var(--border2)' },
+                    },
+                    y: {
+                      ticks: { color: '#ffffff', font: { size: 13 } },
+                      grid: { color: 'var(--border2)' },
+                    },
+                  },
+                }}
+              />
+            </Box>
+          ) : (
+            <Box sx={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', fontSize: '0.95rem' }}>
+              No missed calls in selected range
+            </Box>
+          )}
+        </Box>
+      </Box>
 
       <CallTable calls={filteredCalls} maxDuration={maxDuration} />
     </Box>

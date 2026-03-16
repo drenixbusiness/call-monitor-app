@@ -15,6 +15,7 @@ import * as XLSX from 'xlsx';
 import { useGlobalContext } from '@/components/GlobalContext';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
+ChartJS.defaults.font.family = '"Google Sans", "Helvetica", "Arial", sans-serif';
 
 const USER_COLORS = ['#00d9f5', '#9b7dff', '#00e09a', '#ffcc44', '#ff8c42', '#4db8ff', '#ff6b9d'];
 
@@ -139,15 +140,15 @@ export default function WaitingDashboard() {
 
     const chartOptions = {
         responsive: true,
-        plugins: { legend: { labels: { color: '#ffffff' } }, tooltip: { bodyColor: '#ffffff', titleColor: '#ffffff' } },
-        scales: { x: { ticks: { color: '#ffffff' }, grid: { color: 'var(--border2)' } }, y: { ticks: { color: '#ffffff' }, grid: { color: 'var(--border2)' } } },
+        plugins: { legend: { labels: { color: '#ffffff', font: { size: 14 } } }, tooltip: { bodyColor: '#ffffff', titleColor: '#ffffff', bodyFont: { size: 14 }, titleFont: { size: 15 } } },
+        scales: { x: { ticks: { color: '#ffffff', font: { size: 13 } }, grid: { color: 'var(--border2)' } }, y: { ticks: { color: '#ffffff', font: { size: 13 } }, grid: { color: 'var(--border2)' } } },
     };
 
     const stackedChartOptions = {
         ...chartOptions,
         scales: {
-            x: { stacked: true, ticks: { color: '#ffffff' }, grid: { color: 'var(--border2)' } },
-            y: { stacked: true, ticks: { color: '#ffffff' }, grid: { color: 'var(--border2)' } },
+            x: { stacked: true, ticks: { color: '#ffffff', font: { size: 13 } }, grid: { color: 'var(--border2)' } },
+            y: { stacked: true, ticks: { color: '#ffffff', font: { size: 13 } }, grid: { color: 'var(--border2)' } },
         },
     };
 
@@ -168,8 +169,8 @@ export default function WaitingDashboard() {
             {/* Header + Controls */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
                 <Box>
-                    <Typography sx={{ fontSize: '1.25rem', fontWeight: 700 }}>Custom Range Overview</Typography>
-                    <Typography sx={{ fontSize: '0.8rem', color: 'var(--text2)' }}>
+                    <Typography sx={{ fontSize: '1.35rem', fontWeight: 700 }}>Custom Range Overview</Typography>
+                    <Typography sx={{ fontSize: '1rem', color: 'var(--text2)' }}>
                         Select up to 1 month · fetches live · safe to navigate away while fetching
                     </Typography>
                 </Box>
@@ -232,10 +233,10 @@ export default function WaitingDashboard() {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 3, backgroundColor: 'var(--surface)', borderRadius: 3, border: '1px solid var(--border)' }}>
                     <CircularProgress size={20} sx={{ color: 'var(--accent)' }} />
                     <Box>
-                        <Typography sx={{ color: 'var(--text2)', fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}>
+                        <Typography sx={{ color: 'var(--text2)', fontFamily: 'var(--font-mono)', fontSize: '0.95rem' }}>
                             {progress}
                         </Typography>
-                        <Typography sx={{ color: 'var(--text3)', fontSize: '0.72rem', mt: 0.3 }}>
+                        <Typography sx={{ color: 'var(--text3)', fontSize: '0.82rem', mt: 0.3 }}>
                             1 request per 1.2s to avoid rate limits · you can safely navigate away
                         </Typography>
                     </Box>
@@ -244,7 +245,7 @@ export default function WaitingDashboard() {
 
             {hasFetched && !isFetching && (
                 <>
-                    <Typography sx={{ fontSize: '0.8rem', color: 'var(--text2)' }}>
+                    <Typography sx={{ fontSize: '1rem', color: 'var(--text2)' }}>
                         {fromDate?.toLocaleDateString()} → {toDate?.toLocaleDateString()} ·{' '}
                         {waitingStats.reduce((acc, u) => acc + u.totalCalls, 0)} calls
                         {topCaller && ` · Top caller: ${topCaller.name} (${topCaller.totalCalls} calls, ${fmtDuration(topCaller.talkTime)})`}
@@ -256,7 +257,7 @@ export default function WaitingDashboard() {
                             <Box key={u.name} sx={{ backgroundColor: 'var(--surface)', borderRadius: 3, border: '1px solid var(--border)', p: 3 }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                                     <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: USER_COLORS[i] }} />
-                                    <Typography sx={{ fontWeight: 700, fontSize: '0.9rem' }}>{u.name}</Typography>
+                                    <Typography sx={{ fontWeight: 700, fontSize: '1rem' }}>{u.name}</Typography>
                                 </Box>
                                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
                                     {(
@@ -271,8 +272,8 @@ export default function WaitingDashboard() {
                                             ['Connected', u.connected],
                                         ] as [string, string | number][]).map(([label, val]) => (
                                             <Box key={label}>
-                                                <Typography sx={{ fontSize: '0.7rem', color: 'var(--text3)' }}>{label}</Typography>
-                                                <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: label === 'Missed' ? 'var(--red)' : 'var(--text)' }}>
+                                                <Typography sx={{ fontSize: '0.8rem', color: 'var(--text3)' }}>{label}</Typography>
+                                                <Typography sx={{ fontSize: '1.1rem', fontWeight: 700, color: label === 'Missed' ? 'var(--red)' : 'var(--text)' }}>
                                                     {val}
                                                 </Typography>
                                             </Box>
@@ -285,18 +286,18 @@ export default function WaitingDashboard() {
                     {/* Charts row 1 */}
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1.8fr)', gap: 3 }}>
                         <Box sx={{ backgroundColor: 'var(--surface)', borderRadius: 3, border: '1px solid var(--border)', p: 3 }}>
-                            <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text2)', mb: 2 }}>Calls share by user</Typography>
-                            <Pie data={pieData} options={{ plugins: { legend: { labels: { color: '#ffffff' } }, tooltip: { bodyColor: '#ffffff', titleColor: '#ffffff' } } }} />
+                            <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text2)', mb: 2 }}>Calls share by user</Typography>
+                            <Pie data={pieData} options={{ plugins: { legend: { labels: { color: '#ffffff', font: { size: 14 } } }, tooltip: { bodyColor: '#ffffff', titleColor: '#ffffff', bodyFont: { size: 14 }, titleFont: { size: 15 } } } }} />
                         </Box>
                         <Box sx={{ backgroundColor: 'var(--surface)', borderRadius: 3, border: '1px solid var(--border)', p: 3 }}>
-                            <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text2)', mb: 2 }}>Talk time by user</Typography>
+                            <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text2)', mb: 2 }}>Talk time by user</Typography>
                             <Bar data={talkTimeBarData} options={chartOptions} />
                         </Box>
                     </Box>
 
                     {/* Charts row 2 */}
                     <Box sx={{ backgroundColor: 'var(--surface)', borderRadius: 3, border: '1px solid var(--border)', p: 3 }}>
-                        <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text2)', mb: 2 }}>Inbound / Outbound / Missed by user</Typography>
+                        <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text2)', mb: 2 }}>Inbound / Outbound / Missed by user</Typography>
                         <Bar data={directionBarData} options={stackedChartOptions} />
                     </Box>
                 </>
@@ -304,7 +305,7 @@ export default function WaitingDashboard() {
 
             {!hasFetched && !isFetching && !error && (
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
-                    <Typography sx={{ color: 'var(--text3)', fontSize: '0.9rem' }}>
+                    <Typography sx={{ color: 'var(--text3)', fontSize: '1rem' }}>
                         Select a date range and click Fetch to load call data
                     </Typography>
                 </Box>
