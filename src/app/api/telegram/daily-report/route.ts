@@ -171,7 +171,7 @@ async function fetchAccount2Users(): Promise<UserWithExt[]> {
         users.push({ id: String(u.id), name: u.name });
       }
     }
-    url = data.navigation?.nextPage?.uri || null;
+    url = data.navigation?.nextPage?.uri || null
   }
   return users;
 }
