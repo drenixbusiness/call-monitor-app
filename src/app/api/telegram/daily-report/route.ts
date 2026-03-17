@@ -98,6 +98,10 @@ interface UserWithExt {
 
 const RC_TOKEN_URL = 'https://platform.ringcentral.com/restapi/oauth/token';
 const RC_BASE = 'https://platform.ringcentral.com/restapi';
+const RC_DELAY_MS = 2500;
+const RC_429_RETRY_MS = 65000;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function getAccount1Token(clientId: string, clientSecret: string, jwt: string): Promise<string | null> {
   const encodedAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
@@ -203,11 +207,25 @@ export async function GET(request: Request) {
       ? `https://${process.env.VERCEL_URL}`
       : process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
 
-  // Report date: when cron runs at 23:00 UTC, use that UTC date for shift. ?date=YYYY-MM-DD for testing.
+  // Report date: shift-aware. Bot sends at 4am Tashkent = 23:00 UTC. Before 23:00 UTC = previous day's report.
+  // ?date=YYYY-MM-DD overrides. Shift/calls/leads always in US Central.
   const now = new Date();
-  const reportDate = dateParam
-    ? new Date(dateParam + 'T12:00:00Z')
-    : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  let reportDate: Date;
+  if (dateParam) {
+    reportDate = new Date(dateParam + 'T12:00:00Z');
+  } else {
+    const y = now.getUTCFullYear();
+    const m = now.getUTCMonth();
+    const d = now.getUTCDate();
+    const hour = now.getUTCHours();
+    if (hour < 23) {
+      const prev = new Date(Date.UTC(y, m, d));
+      prev.setUTCDate(prev.getUTCDate() - 1);
+      reportDate = prev;
+    } else {
+      reportDate = new Date(Date.UTC(y, m, d));
+    }
+  }
   const { from: shiftFrom, to: shiftTo } = getShiftWindowISO(reportDate);
   const { from: dayFrom, to: dayTo } = getReportDayRangeISO(reportDate);
 
@@ -239,7 +257,11 @@ export async function GET(request: Request) {
     let hasMore = true;
     while (hasMore) {
       const url = `${RC_BASE}/v1.0/account/~/extension/${encodeURIComponent(extId)}/call-log?view=Detailed&type=Voice&dateFrom=${encodeURIComponent(shiftFrom)}&dateTo=${encodeURIComponent(shiftTo)}&page=${page}&perPage=100`;
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      let res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 429) {
+        await sleep(RC_429_RETRY_MS);
+        res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      }
       if (!res.ok) {
         const errText = await res.text();
         fetchErrors.push({ extId, status: res.status, error: errText.slice(0, 200) });
@@ -282,10 +304,16 @@ export async function GET(request: Request) {
   const acc1UserList = users.slice(0, acc1Count);
   const acc2UserList = users.slice(acc1Count);
   for (const u of acc1UserList) {
-    if (rc1Token) await fetchCallsForUser(u.id, rc1Token);
+    if (rc1Token) {
+      await fetchCallsForUser(u.id, rc1Token);
+      await sleep(RC_DELAY_MS);
+    }
   }
   for (const u of acc2UserList) {
-    if (rc2Token) await fetchCallsForUser(u.id, rc2Token);
+    if (rc2Token) {
+      await fetchCallsForUser(u.id, rc2Token);
+      await sleep(RC_DELAY_MS);
+    }
   }
 
   const allRecordsCount = callRecords.length;
@@ -356,6 +384,7 @@ export async function GET(request: Request) {
         else if (lead.timing === 'Late') s.leadsLate += 1;
         if (lead.status === 'Rejected') s.leadsRejected += 1;
       }
+      await sleep(400);
     } catch {
       // skip on error
     }
@@ -426,6 +455,7 @@ export async function GET(request: Request) {
   if (debug) {
     return NextResponse.json({
       debug: true,
+      hint: 'For manual trigger, add ?date=YYYY-MM-DD (e.g. ?date=2026-03-17) to report that day.',
       reportDate: reportDateStr,
       shiftWindow: { from: shiftFrom, to: shiftTo },
       leadDayRange: { from: dayFrom, to: dayTo },
