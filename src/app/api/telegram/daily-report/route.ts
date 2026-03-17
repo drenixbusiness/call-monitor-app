@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getShiftWindowISO, getReportDayRangeISO } from '@/utils/leadShift';
+import { getShiftWindowISO, getReportDayRangeISO, getShiftHours } from '@/utils/leadShift';
 import { WHITELIST_ACCOUNT1 } from '@/lib/whitelist';
 
 type UserStats = {
   name: string;
   talkMinutes: number;
+  leadsTotal: number;
   leadsOnTime: number;
   leadsLate: number;
   callsConnected: number;
@@ -19,7 +20,7 @@ interface AIReportResult {
 
 async function fetchAIReport(
   statsList: UserStats[],
-  totals: { talk: number; onTime: number; late: number; connected: number; missed: number; rejected: number }
+  totals: { talk: number; total: number; onTime: number; late: number; connected: number; missed: number; rejected: number }
 ): Promise<AIReportResult | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
@@ -27,7 +28,7 @@ async function fetchAIReport(
   const userData = statsList
     .map(
       (s) =>
-        `${s.name}: talk ${s.talkMinutes} min, leads ${s.leadsOnTime} on-time / ${s.leadsLate} late, calls ${s.callsConnected} connected / ${s.callsMissed} missed, rejected ${s.leadsRejected}`
+        `${s.name}: talk ${s.talkMinutes} min, leads ${s.leadsTotal} total (${s.leadsOnTime} on-time / ${s.leadsLate} late), calls ${s.callsConnected} connected / ${s.callsMissed} missed, rejected ${s.leadsRejected}`
     )
     .join('\n');
 
@@ -38,7 +39,7 @@ async function fetchAIReport(
 Respond ONLY with valid JSON in this exact format (no markdown, no code block):
 {"dailyOutcome":"...","advice":[{"name":"Full Name","advice":"..."}]}`;
 
-  const userPrompt = `Today's shift stats (8am-5pm US Central). Team totals: talk ${totals.talk} min, leads ${totals.onTime} on-time / ${totals.late} late, calls ${totals.connected} connected / ${totals.missed} missed, rejected ${totals.rejected}.
+  const userPrompt = `Today's shift stats (9am-6pm CDT / 8am-5pm CST US Central). Team totals: talk ${totals.talk} min, leads ${totals.total} total (${totals.onTime} on-time / ${totals.late} late), calls ${totals.connected} connected / ${totals.missed} missed, rejected ${totals.rejected}.
 
 Per recruiter:
 ${userData}
@@ -289,6 +290,7 @@ export async function GET(request: Request) {
     statsByUser[key] = {
       name: u.name,
       talkMinutes: 0,
+      leadsTotal: 0,
       leadsOnTime: 0,
       leadsLate: 0,
       callsConnected: 0,
@@ -322,6 +324,7 @@ export async function GET(request: Request) {
       statsByUser[key] = {
         name: rcName,
         talkMinutes: 0,
+        leadsTotal: 0,
         leadsOnTime: 0,
         leadsLate: 0,
         callsConnected: 0,
@@ -340,6 +343,7 @@ export async function GET(request: Request) {
       const leads = leadsData.leads || [];
 
       for (const lead of leads) {
+        s.leadsTotal += 1;
         if (lead.timing === 'On time') s.leadsOnTime += 1;
         else if (lead.timing === 'Late') s.leadsLate += 1;
         if (lead.status === 'Rejected') s.leadsRejected += 1;
@@ -352,6 +356,7 @@ export async function GET(request: Request) {
   const reportDateStr = reportDate.toISOString().slice(0, 10);
 
   let totalTalk = 0;
+  let totalLeads = 0;
   let totalOnTime = 0;
   let totalLate = 0;
   let totalConnected = 0;
@@ -365,6 +370,7 @@ export async function GET(request: Request) {
     const s = statsByUser[key];
     if (!s) continue;
     totalTalk += s.talkMinutes;
+    totalLeads += s.leadsTotal;
     totalOnTime += s.leadsOnTime;
     totalLate += s.leadsLate;
     totalConnected += s.callsConnected;
@@ -375,6 +381,7 @@ export async function GET(request: Request) {
 
   const aiReport = await fetchAIReport(statsList, {
     talk: totalTalk,
+    total: totalLeads,
     onTime: totalOnTime,
     late: totalLate,
     connected: totalConnected,
@@ -382,12 +389,14 @@ export async function GET(request: Request) {
     rejected: totalRejected,
   });
 
+  const { start } = getShiftHours(reportDate);
+  const shiftLabel = start === 9 ? '9am–6pm' : '8am–5pm';
   let msg = `📊 *HR Daily Report — ${reportDateStr}*\n`;
-  msg += `Shift: 8am–5pm US Central (7pm–4am Tashkent)\n\n`;
+  msg += `Shift: ${shiftLabel} US Central (7pm–4am Tashkent)\n\n`;
 
   for (const s of statsList) {
     msg += `👤 *${s.name}*\n`;
-    msg += `   Talk: ${s.talkMinutes} min | Leads: ${s.leadsOnTime} on-time, ${s.leadsLate} late | Calls: ${s.callsConnected} connected, ${s.callsMissed} missed | Rejected: ${s.leadsRejected}\n\n`;
+    msg += `   Talk: ${s.talkMinutes} min | Leads: ${s.leadsTotal} total (${s.leadsOnTime} on-time, ${s.leadsLate} late) | Calls: ${s.callsConnected} connected, ${s.callsMissed} missed | Rejected: ${s.leadsRejected}\n\n`;
   }
 
   if (aiReport) {
@@ -399,7 +408,7 @@ export async function GET(request: Request) {
   }
 
   msg += `📈 *TOTAL (5 users)*\n`;
-  msg += `   Talk: ${totalTalk} min | Leads: ${totalOnTime} on-time, ${totalLate} late | Calls: ${totalConnected} connected, ${totalMissed} missed | Rejected: ${totalRejected}`;
+  msg += `   Talk: ${totalTalk} min | Leads: ${totalLeads} total (${totalOnTime} on-time, ${totalLate} late) | Calls: ${totalConnected} connected, ${totalMissed} missed | Rejected: ${totalRejected}`;
 
   const TELEGRAM_MAX_LENGTH = 4096;
   if (msg.length > TELEGRAM_MAX_LENGTH) {

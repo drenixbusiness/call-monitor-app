@@ -168,16 +168,17 @@ export function getLeadTiming(
 }
 
 /**
- * Get shift window (8am–5pm US Central) for a given date as ISO strings.
- * Used for daily report: reportDate = UTC date when cron runs at 23:00.
+ * Get shift window (CDT: 9am–6pm, CST: 8am–5pm US Central) for a given date as ISO strings.
+ * Matches Tashkent 7pm–4am. Used for daily report: reportDate = UTC date when cron runs.
  */
 export function getShiftWindowISO(reportDate: Date): { from: string; to: string } {
   const y = reportDate.getUTCFullYear();
   const m = reportDate.getUTCMonth();
   const d = reportDate.getUTCDate();
   const offset = getCentralOffsetHours(y, m, d);
-  const startHour = 8 - offset;
-  const endHour = 17 - offset;
+  const { start, end } = getShiftHours(reportDate);
+  const startHour = start - offset;
+  const endHour = end - 1 - offset;
   const from = new Date(Date.UTC(y, m, d, startHour, 0, 0, 0));
   const to = new Date(Date.UTC(y, m, d, endHour, 59, 59, 999));
   return { from: from.toISOString(), to: to.toISOString() };

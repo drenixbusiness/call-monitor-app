@@ -156,50 +156,67 @@ async function getExtensionsForAccount(token: string): Promise<string[]> {
 }
 
 export async function POST(request: Request) {
-  const { token, extensionIds } = await request.json();
-
-  if (!token || !extensionIds?.length) {
-    return NextResponse.json({ error: 'Missing token or extensionIds' }, { status: 400 });
-  }
-
-  if (globalAny.syncRunning) {
-    return NextResponse.json({ status: 'already_running' });
-  }
-
-  const normalizeExtId = (id: string | number) => String(id).replace(/\.0$/, '');
-  const extIdStrings = extensionIds.map(normalizeExtId);
-
-  globalAny.syncRunning = true;
-
-  let totalInserted = 0;
-  const perExtensionInserted: Record<string, number> = {};
-  const lastRequestTime = { value: 0 };
-
   try {
-    // Sync account 1
-    const inserted1 = await syncAccount(token, extIdStrings, 'account1', perExtensionInserted, lastRequestTime);
-    totalInserted += inserted1;
+    const body = await request.json();
+    const { token, extensionIds } = body || {};
 
-    // Sync account 2
-    const token2 = await getTokenForAccount2();
-    if (!token2) {
-      console.log('[sync] Account 2: No token (missing RC2_* env vars or token failed)');
-    } else {
-      const extIds2 = await getExtensionsForAccount(token2);
-      console.log('[sync] Account 2: Found', extIds2.length, 'extensions to sync');
-      if (extIds2.length > 0) {
-        const inserted2 = await syncAccount(token2, extIds2, 'account2', perExtensionInserted, lastRequestTime);
-        totalInserted += inserted2;
-        console.log('[sync] Account 2: Inserted', inserted2, 'calls');
-      }
+    if (!token || !extensionIds?.length) {
+      return NextResponse.json({ error: 'Missing token or extensionIds' }, { status: 400 });
     }
-  } finally {
-    globalAny.syncRunning = false;
-  }
 
-  return NextResponse.json({
-    status: 'done',
-    inserted: totalInserted,
-    perExtensionInserted,
-  });
+    if (!process.env.POSTGRES_URL) {
+      return NextResponse.json(
+        { error: 'Database not configured. Set POSTGRES_URL in Vercel environment variables.' },
+        { status: 500 }
+      );
+    }
+
+    if (globalAny.syncRunning) {
+      return NextResponse.json({ status: 'already_running' });
+    }
+
+    const normalizeExtId = (id: string | number) => String(id).replace(/\.0$/, '');
+    const extIdStrings = extensionIds.map(normalizeExtId);
+
+    globalAny.syncRunning = true;
+
+    let totalInserted = 0;
+    const perExtensionInserted: Record<string, number> = {};
+    const lastRequestTime = { value: 0 };
+
+    try {
+      // Sync account 1
+      const inserted1 = await syncAccount(token, extIdStrings, 'account1', perExtensionInserted, lastRequestTime);
+      totalInserted += inserted1;
+
+      // Sync account 2
+      const token2 = await getTokenForAccount2();
+      if (!token2) {
+        console.log('[sync] Account 2: No token (missing RC2_* env vars or token failed)');
+      } else {
+        const extIds2 = await getExtensionsForAccount(token2);
+        console.log('[sync] Account 2: Found', extIds2.length, 'extensions to sync');
+        if (extIds2.length > 0) {
+          const inserted2 = await syncAccount(token2, extIds2, 'account2', perExtensionInserted, lastRequestTime);
+          totalInserted += inserted2;
+          console.log('[sync] Account 2: Inserted', inserted2, 'calls');
+        }
+      }
+    } finally {
+      globalAny.syncRunning = false;
+    }
+
+    return NextResponse.json({
+      status: 'done',
+      inserted: totalInserted,
+      perExtensionInserted,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[sync] Error:', err);
+    return NextResponse.json(
+      { error: 'Sync failed', details: message },
+      { status: 500 }
+    );
+  }
 }
