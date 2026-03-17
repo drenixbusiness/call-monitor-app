@@ -182,3 +182,18 @@ export function getShiftWindowISO(reportDate: Date): { from: string; to: string 
   const to = new Date(Date.UTC(y, m, d, endHour, 59, 59, 999));
   return { from: from.toISOString(), to: to.toISOString() };
 }
+
+/**
+ * Get full calendar day (00:00–23:59:59 US Central) for a given date as ISO strings.
+ * Used for Monday leads: matches dashboard "today" filter (leads with date-only column).
+ */
+export function getReportDayRangeISO(reportDate: Date): { from: string; to: string } {
+  const y = reportDate.getUTCFullYear();
+  const m = reportDate.getUTCMonth();
+  const d = reportDate.getUTCDate();
+  const offset = getCentralOffsetHours(y, m, d);
+  const startHour = 0 - offset;
+  const from = new Date(Date.UTC(y, m, d, startHour, 0, 0, 0));
+  const to = new Date(Date.UTC(y, m, d + 1, startHour, 0, 0, 0) - 1);
+  return { from: from.toISOString(), to: to.toISOString() };
+}

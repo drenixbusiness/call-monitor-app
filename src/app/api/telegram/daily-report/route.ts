@@ -1,6 +1,85 @@
 import { NextResponse } from 'next/server';
-import { getShiftWindowISO } from '@/utils/leadShift';
+import { getShiftWindowISO, getReportDayRangeISO } from '@/utils/leadShift';
 import { WHITELIST_ACCOUNT1 } from '@/lib/whitelist';
+
+type UserStats = {
+  name: string;
+  talkMinutes: number;
+  leadsOnTime: number;
+  leadsLate: number;
+  callsConnected: number;
+  callsMissed: number;
+  leadsRejected: number;
+};
+
+interface AIReportResult {
+  dailyOutcome: string;
+  advice: { name: string; advice: string }[];
+}
+
+async function fetchAIReport(
+  statsList: UserStats[],
+  totals: { talk: number; onTime: number; late: number; connected: number; missed: number; rejected: number }
+): Promise<AIReportResult | null> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  const userData = statsList
+    .map(
+      (s) =>
+        `${s.name}: talk ${s.talkMinutes} min, leads ${s.leadsOnTime} on-time / ${s.leadsLate} late, calls ${s.callsConnected} connected / ${s.callsMissed} missed, rejected ${s.leadsRejected}`
+    )
+    .join('\n');
+
+  const systemPrompt = `You are an HR advisor for phone recruiters. Based on their shift stats, provide:
+1. A brief daily outcome summary (2-4 sentences): who worked, what they accomplished, notable patterns.
+2. For each recruiter: 2-3 short, actionable tips. Focus on call handling, lead timing, and productivity. Be encouraging but specific. Keep each advice under 200 characters.
+
+Respond ONLY with valid JSON in this exact format (no markdown, no code block):
+{"dailyOutcome":"...","advice":[{"name":"Full Name","advice":"..."}]}`;
+
+  const userPrompt = `Today's shift stats (8am-5pm US Central). Team totals: talk ${totals.talk} min, leads ${totals.onTime} on-time / ${totals.late} late, calls ${totals.connected} connected / ${totals.missed} missed, rejected ${totals.rejected}.
+
+Per recruiter:
+${userData}
+
+Return JSON only.`;
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.7,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error('[telegram/daily-report] OpenAI error:', res.status, await res.text());
+      return null;
+    }
+
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content?.trim();
+    if (!content) return null;
+
+    const cleaned = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const parsed = JSON.parse(cleaned) as AIReportResult;
+    if (!parsed.dailyOutcome || !Array.isArray(parsed.advice)) return null;
+    return parsed;
+  } catch (err) {
+    console.error('[telegram/daily-report] OpenAI fetch failed:', err);
+    return null;
+  }
+}
 
 /** HR recruiter RC names (exclude Safety) */
 const HR_RC_NAMES = new Set([
@@ -46,6 +125,9 @@ async function fetchAccount1Users(base: string, clientId: string, clientSecret: 
 }
 
 export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const debug = searchParams.get('debug') === '1';
+
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
@@ -56,10 +138,10 @@ export async function GET(request: Request) {
     );
   }
 
-  // Optional: require CRON_SECRET when invoked by Vercel Cron
+  // Optional: require CRON_SECRET when invoked by Vercel Cron (skip for debug)
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!debug && cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -71,15 +153,19 @@ export async function GET(request: Request) {
   // Report date: when cron runs at 23:00 UTC, use that UTC date for shift (8am–5pm US Central)
   const now = new Date();
   const reportDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const { from: dateFrom, to: dateTo } = getShiftWindowISO(reportDate);
+  const { from: shiftFrom, to: shiftTo } = getShiftWindowISO(reportDate);
+  const { from: dayFrom, to: dayTo } = getReportDayRangeISO(reportDate);
 
   const rc1ClientId = process.env.RC_CLIENT_ID || process.env.NEXT_PUBLIC_RC_CLIENT_ID;
   const rc1ClientSecret = process.env.RC_CLIENT_SECRET || process.env.NEXT_PUBLIC_RC_CLIENT_SECRET;
   const rc1Jwt = process.env.RC_JWT || process.env.NEXT_PUBLIC_RC_JWT;
   const users: UserWithExt[] = [];
+  let acc1Count = 0;
+  let acc2Count = 0;
 
   if (rc1ClientId && rc1ClientSecret && rc1Jwt) {
     const acc1Users = await fetchAccount1Users(base, rc1ClientId, rc1ClientSecret, rc1Jwt);
+    acc1Count = acc1Users.length;
     users.push(...acc1Users);
   }
 
@@ -89,31 +175,37 @@ export async function GET(request: Request) {
     const acc2 = (acc2Data.users || [])
       .filter((u: any) => HR_RC_NAMES.has(u.name))
       .map((u: any) => ({ id: String(u.id), name: u.name }));
+    acc2Count = acc2.length;
     users.push(...acc2);
   }
 
   const extIds = users.map((u) => u.id);
 
+  // Same technique as dashboard: fetch range=all, then filter by shift window + duration (duration >= 20 for connected)
   let callRecords: any[] = [];
+  let allRecordsCount = 0;
   if (extIds.length > 0) {
     const callsRes = await fetch(
-      `${base}/api/calls?range=custom&extensionIds=${extIds.join(',')}&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`
+      `${base}/api/calls?range=all&extensionIds=${extIds.join(',')}`
     );
     const callsData = callsRes.ok ? await callsRes.json() : {};
-    callRecords = callsData.records || [];
+    const allRecords = callsData.records || [];
+    allRecordsCount = allRecords.length;
+    const shiftFromDate = new Date(shiftFrom);
+    const shiftToDate = new Date(shiftTo);
+    for (const c of allRecords) {
+      const startTime = c.startTime ? new Date(c.startTime) : null;
+      if (!startTime || isNaN(startTime.getTime())) continue;
+      if (startTime < shiftFromDate || startTime > shiftToDate) continue;
+      if (c.result === 'Missed') {
+        callRecords.push(c);
+      } else if ((c.result === 'Accepted' || c.result === 'Call connected') && (c.duration || 0) >= 20) {
+        callRecords.push(c);
+      }
+    }
   }
 
   const normalizeExt = (id: string | number) => String(id).replace(/\.0$/, '');
-
-  type UserStats = {
-    name: string;
-    talkMinutes: number;
-    leadsOnTime: number;
-    leadsLate: number;
-    callsConnected: number;
-    callsMissed: number;
-    leadsRejected: number;
-  };
 
   const statsByUser: Record<string, UserStats> = {};
   for (const u of users) {
@@ -165,7 +257,7 @@ export async function GET(request: Request) {
 
     try {
       const leadsRes = await fetch(
-        `${base}/api/monday/leads?user=${encodeURIComponent(mondayUser)}&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`
+        `${base}/api/monday/leads?user=${encodeURIComponent(mondayUser)}&dateFrom=${encodeURIComponent(dayFrom)}&dateTo=${encodeURIComponent(dayTo)}`
       );
       if (!leadsRes.ok) continue;
       const leadsData = await leadsRes.json();
@@ -182,8 +274,6 @@ export async function GET(request: Request) {
   }
 
   const reportDateStr = reportDate.toISOString().slice(0, 10);
-  let msg = `📊 *HR Daily Report — ${reportDateStr}*\n`;
-  msg += `Shift: 8am–5pm US Central (7pm–4am Tashkent)\n\n`;
 
   let totalTalk = 0;
   let totalOnTime = 0;
@@ -191,6 +281,7 @@ export async function GET(request: Request) {
   let totalConnected = 0;
   let totalMissed = 0;
   let totalRejected = 0;
+  const statsList: UserStats[] = [];
 
   for (const { rcName } of HR_RECRUITERS) {
     const userEntry = users.find((u) => u.name === rcName);
@@ -203,12 +294,66 @@ export async function GET(request: Request) {
     totalConnected += s.callsConnected;
     totalMissed += s.callsMissed;
     totalRejected += s.leadsRejected;
+    statsList.push(s);
+  }
+
+  const aiReport = await fetchAIReport(statsList, {
+    talk: totalTalk,
+    onTime: totalOnTime,
+    late: totalLate,
+    connected: totalConnected,
+    missed: totalMissed,
+    rejected: totalRejected,
+  });
+
+  let msg = `📊 *HR Daily Report — ${reportDateStr}*\n`;
+  msg += `Shift: 8am–5pm US Central (7pm–4am Tashkent)\n\n`;
+
+  for (const s of statsList) {
     msg += `👤 *${s.name}*\n`;
     msg += `   Talk: ${s.talkMinutes} min | Leads: ${s.leadsOnTime} on-time, ${s.leadsLate} late | Calls: ${s.callsConnected} connected, ${s.callsMissed} missed | Rejected: ${s.leadsRejected}\n\n`;
   }
 
+  if (aiReport) {
+    msg += `📋 *Daily Outcome*\n${aiReport.dailyOutcome}\n\n`;
+    msg += `💡 *Advice*\n`;
+    for (const { name, advice } of aiReport.advice) {
+      msg += `👤 *${name}*: ${advice}\n\n`;
+    }
+  }
+
   msg += `📈 *TOTAL (5 users)*\n`;
   msg += `   Talk: ${totalTalk} min | Leads: ${totalOnTime} on-time, ${totalLate} late | Calls: ${totalConnected} connected, ${totalMissed} missed | Rejected: ${totalRejected}`;
+
+  const TELEGRAM_MAX_LENGTH = 4096;
+  if (msg.length > TELEGRAM_MAX_LENGTH) {
+    msg = msg.slice(0, TELEGRAM_MAX_LENGTH - 20) + '\n\n...[truncated]';
+  }
+
+  if (debug) {
+    return NextResponse.json({
+      debug: true,
+      reportDate: reportDateStr,
+      shiftWindow: { from: shiftFrom, to: shiftTo },
+      leadDayRange: { from: dayFrom, to: dayTo },
+      users: {
+        account1: acc1Count,
+        account2: acc2Count,
+        total: users.length,
+        extensionIds: extIds,
+      },
+      calls: {
+        allFromDb: allRecordsCount,
+        afterShiftFilter: callRecords.length,
+      },
+      env: {
+        hasRc1: !!(rc1ClientId && rc1ClientSecret && rc1Jwt),
+        hasPostgres: !!process.env.POSTGRES_URL,
+        hasMonday: !!process.env.MONDAY_API_TOKEN,
+      },
+      message: msg,
+    });
+  }
 
   const sendRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',

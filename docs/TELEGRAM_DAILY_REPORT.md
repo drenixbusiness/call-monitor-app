@@ -5,6 +5,8 @@
 A Telegram bot that sends a daily summary of 5 HR recruiters (excluding 2 Safety users) every work day at **4:00 AM Tashkent time** (shift end). The report includes:
 
 - **Per user:** Talk time (minutes), leads late/on-time, calls missed/connected, leads rejected
+- **Daily outcome:** AI-generated summary of who worked and what they accomplished (requires `OPENAI_API_KEY`)
+- **Advice:** AI-generated tips for each recruiter to finish their shift successfully (requires `OPENAI_API_KEY`)
 - **Total:** Aggregate of all 5 users
 
 ---
@@ -52,9 +54,14 @@ RC2_JWT=...
 
 # Optional: restrict cron to authorized callers only
 CRON_SECRET=your_random_secret_string
+
+# Optional: AI-generated daily outcome and per-user advice (uses gpt-4o-mini)
+OPENAI_API_KEY=sk-...
 ```
 
 **Note:** `RC_CLIENT_ID`, `RC_CLIENT_SECRET`, `RC_JWT` are your main RingCentral app credentials (account1). If not set, the report will only include account2 users (Winston, Alex, Jessica) and will skip Ethan and Fred.
+
+**Note:** If `OPENAI_API_KEY` is not set, the report will still be sent but without the "Daily Outcome" and "Advice" sections.
 
 ---
 
@@ -120,6 +127,14 @@ Shift: 8am–5pm US Central (7pm–4am Tashkent)
    Talk: 92 min | Leads: 8 on-time, 1 late | Calls: 38 connected, 1 missed | Rejected: 0
 ...
 
+📋 Daily Outcome
+[AI-generated summary of who worked and what they accomplished]
+
+💡 Advice
+👤 Alex Chester: [personalized tips]
+👤 Fred Royce: [personalized tips]
+...
+
 📈 TOTAL (5 users)
    Talk: 412 min | Leads: 52 on-time, 8 late | Calls: 198 connected, 5 missed | Rejected: 3
 ```
@@ -135,3 +150,14 @@ The project includes `vercel.json` with the cron already configured. After deplo
 3. The cron runs at **23:00 UTC** = **4:00 AM Tashkent** (Mon–Sat)
 
 **Manual test:** `GET /api/telegram/daily-report` — if `CRON_SECRET` is set, add header: `Authorization: Bearer <your-secret>`
+
+---
+
+## Data Alignment with Dashboard
+
+The Telegram bot uses the **same data logic** as the dashboard:
+
+- **Calls:** Fetches `range=all` from `/api/calls`, then filters by shift window (8am–5pm US Central) and applies the same rules: Missed calls always count; connected calls (Accepted/Call connected) only count if duration ≥ 20 seconds.
+- **Leads:** Uses full calendar day (00:00–23:59 US Central) for the report date when calling `/api/monday/leads`, matching the dashboard’s “today” filter for leads with date-only columns.
+
+**Important:** The cron runs on the deployed app (e.g. Vercel). Ensure the dashboard is opened and synced on the **deployed URL** (not only localhost) so the database has recent call data when the cron runs.
