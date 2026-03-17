@@ -224,31 +224,62 @@ export async function GET(request: Request) {
   acc2Count = acc2Users.length;
   users.push(...acc2Users);
 
-  const extIds = users.map((u) => u.id);
+  // Fetch calls directly from RingCentral (no DB dependency) - same as dashboard's Waiting view
+  const callRecords: any[] = [];
+  const shiftFromDate = new Date(shiftFrom);
+  const shiftToDate = new Date(shiftTo);
 
-  // Same technique as dashboard: fetch range=all, then filter by shift window + duration (duration >= 20 for connected)
-  let callRecords: any[] = [];
-  let allRecordsCount = 0;
-  if (extIds.length > 0) {
-    const callsRes = await fetch(
-      `${base}/api/calls?range=all&extensionIds=${extIds.join(',')}`
-    );
-    const callsData = callsRes.ok ? await callsRes.json() : {};
-    const allRecords = callsData.records || [];
-    allRecordsCount = allRecords.length;
-    const shiftFromDate = new Date(shiftFrom);
-    const shiftToDate = new Date(shiftTo);
-    for (const c of allRecords) {
-      const startTime = c.startTime ? new Date(c.startTime) : null;
-      if (!startTime || isNaN(startTime.getTime())) continue;
-      if (startTime < shiftFromDate || startTime > shiftToDate) continue;
-      if (c.result === 'Missed') {
-        callRecords.push(c);
-      } else if ((c.result === 'Accepted' || c.result === 'Call connected') && (c.duration || 0) >= 20) {
-        callRecords.push(c);
+  const fetchCallsForUser = async (extId: string, token: string): Promise<void> => {
+    let page = 1;
+    let hasMore = true;
+    while (hasMore) {
+      const url = `${RC_BASE}/v1.0/account/~/extension/${encodeURIComponent(extId)}/call-log?view=Detailed&type=Voice&dateFrom=${encodeURIComponent(shiftFrom)}&dateTo=${encodeURIComponent(shiftTo)}&page=${page}&perPage=100`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) break;
+      const data: { records?: any[]; paging?: { page?: number; totalPages?: number } } = await res.json();
+      const records = data.records || [];
+      for (const c of records) {
+        const startTime = c.startTime ? new Date(c.startTime) : null;
+        if (!startTime || isNaN(startTime.getTime())) continue;
+        if (startTime < shiftFromDate || startTime > shiftToDate) continue;
+        if (c.result === 'Missed') {
+          callRecords.push({ ...c, extension: { id: extId } });
+        } else if ((c.result === 'Accepted' || c.result === 'Call connected') && (c.duration || 0) >= 20) {
+          callRecords.push({ ...c, extension: { id: extId } });
+        }
       }
+      hasMore = records.length === 100;
+      page++;
+      if (page > 50) break;
     }
+  };
+
+  const rc1Token = rc1ClientId && rc1ClientSecret && rc1Jwt ? await getAccount1Token(rc1ClientId, rc1ClientSecret, rc1Jwt) : null;
+  let rc2Token: string | null = null;
+  if (process.env.RC2_CLIENT_ID && process.env.RC2_CLIENT_SECRET && process.env.RC2_JWT) {
+    const enc = Buffer.from(`${process.env.RC2_CLIENT_ID}:${process.env.RC2_CLIENT_SECRET}`).toString('base64');
+    const p = new URLSearchParams();
+    p.append('grant_type', 'urn:ietf:params:oauth:grant-type:jwt-bearer');
+    p.append('assertion', process.env.RC2_JWT);
+    const r = await fetch(RC_TOKEN_URL, {
+      method: 'POST',
+      headers: { Authorization: `Basic ${enc}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: p.toString(),
+    });
+    const d = await r.json();
+    rc2Token = r.ok ? d.access_token : null;
   }
+
+  const acc1UserList = users.slice(0, acc1Count);
+  const acc2UserList = users.slice(acc1Count);
+  for (const u of acc1UserList) {
+    if (rc1Token) await fetchCallsForUser(u.id, rc1Token);
+  }
+  for (const u of acc2UserList) {
+    if (rc2Token) await fetchCallsForUser(u.id, rc2Token);
+  }
+
+  const allRecordsCount = callRecords.length;
 
   const normalizeExt = (id: string | number) => String(id).replace(/\.0$/, '');
 
@@ -385,11 +416,10 @@ export async function GET(request: Request) {
         account1: acc1Count,
         account2: acc2Count,
         total: users.length,
-        extensionIds: extIds,
+        extensionIds: users.map((u) => u.id),
       },
       calls: {
-        allFromDb: allRecordsCount,
-        afterShiftFilter: callRecords.length,
+        fromRingCentral: allRecordsCount,
       },
       env: {
         hasRc1: !!(rc1ClientId && rc1ClientSecret && rc1Jwt),
