@@ -10,6 +10,9 @@ const HR_RC_NAMES = new Set([
   'Jessica Miller',
 ]);
 
+const RC_TOKEN_URL = 'https://platform.ringcentral.com/restapi/oauth/token';
+const RC_BASE = 'https://platform.ringcentral.com/restapi';
+
 interface UserWithExt {
   id: string;
   name: string;
@@ -34,50 +37,95 @@ export async function GET() {
     let acc1Count = 0;
     let acc2Count = 0;
     const users: UserWithExt[] = [];
+    let tokenError: string | null = null;
+    let account2Error: string | null = null;
+    let account2RawCount = 0;
+    let account2UserNames: string[] = [];
 
     if (rc1ClientId && rc1ClientSecret && rc1Jwt) {
       try {
-        const tokenRes = await fetch(`${base}/api/token`, {
+        const encodedAuth = Buffer.from(`${rc1ClientId}:${rc1ClientSecret}`).toString('base64');
+        const params = new URLSearchParams();
+        params.append('grant_type', 'urn:ietf:params:oauth:grant-type:jwt-bearer');
+        params.append('assertion', rc1Jwt);
+        const tokenRes = await fetch(RC_TOKEN_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId: rc1ClientId, clientSecret: rc1ClientSecret, jwt: rc1Jwt }),
+          headers: {
+            Authorization: `Basic ${encodedAuth}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: params.toString(),
         });
         const tokenData = await tokenRes.json();
         const token = tokenRes.ok ? tokenData.access_token : null;
+        if (!tokenRes.ok) {
+          tokenError = tokenData.error || tokenData.error_description || `HTTP ${tokenRes.status}`;
+        }
         if (token) {
-          let nextUrl = `${base}/api/rc/v1.0/account/~/extension?type=User&status=Enabled&perPage=100&page=1`;
-          while (nextUrl) {
-            const res = await fetch(nextUrl, { headers: { 'x-rc-auth': token } });
+          let url: string | null = `${RC_BASE}/v1.0/account/~/extension?type=User&status=Enabled&perPage=100&page=1`;
+          while (url) {
+            const res: Response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
             if (!res.ok) break;
-            const data = await res.json();
+            const data: { records?: any[]; navigation?: { nextPage?: { uri?: string } } } = await res.json();
             const records = data.records || [];
             for (const u of records) {
               if (WHITELIST_ACCOUNT1.includes(u.name) && HR_RC_NAMES.has(u.name)) {
                 users.push({ id: String(u.id), name: u.name });
               }
             }
-            nextUrl = data.navigation?.nextPage?.uri
-              ? data.navigation.nextPage.uri.replace('https://platform.ringcentral.com/restapi', `${base}/api/rc`)
-              : '';
+            acc1Count = users.length;
+            url = data.navigation?.nextPage?.uri || null;
           }
         }
-        acc1Count = users.length;
       } catch (e) {
+        tokenError = e instanceof Error ? e.message : String(e);
         console.error('[telegram/debug] Account1 error:', e);
       }
     }
 
     try {
-      const acc2Res = await fetch(`${base}/api/account2/users`);
-      if (acc2Res.ok) {
-        const acc2Data = await acc2Res.json();
-        const acc2 = (acc2Data.users || [])
-          .filter((u: any) => HR_RC_NAMES.has(u.name))
-          .map((u: any) => ({ id: String(u.id), name: u.name }));
-        acc2Count = acc2.length;
-        users.push(...acc2);
+      const rc2ClientId = process.env.RC2_CLIENT_ID;
+      const rc2ClientSecret = process.env.RC2_CLIENT_SECRET;
+      const rc2Jwt = process.env.RC2_JWT;
+      if (rc2ClientId && rc2ClientSecret && rc2Jwt) {
+        const encodedAuth = Buffer.from(`${rc2ClientId}:${rc2ClientSecret}`).toString('base64');
+        const params = new URLSearchParams();
+        params.append('grant_type', 'urn:ietf:params:oauth:grant-type:jwt-bearer');
+        params.append('assertion', rc2Jwt);
+        const tokenRes = await fetch(RC_TOKEN_URL, {
+          method: 'POST',
+          headers: {
+            Authorization: `Basic ${encodedAuth}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: params.toString(),
+        });
+        const tokenData = await tokenRes.json();
+        const token = tokenRes.ok ? tokenData.access_token : null;
+        if (!tokenRes.ok) {
+          account2Error = tokenData.error || tokenData.error_description || `HTTP ${tokenRes.status}`;
+        } else if (token) {
+          const allAcc2: UserWithExt[] = [];
+          let url: string | null = `${RC_BASE}/v1.0/account/~/extension?type=User&status=Enabled&perPage=100&page=1`;
+          while (url) {
+            const res: Response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+            if (!res.ok) break;
+            const data: { records?: any[]; navigation?: { nextPage?: { uri?: string } } } = await res.json();
+            const records = data.records || [];
+            for (const u of records) {
+              allAcc2.push({ id: String(u.id), name: u.name });
+            }
+            url = data.navigation?.nextPage?.uri || null;
+          }
+          account2RawCount = allAcc2.length;
+          account2UserNames = allAcc2.map((u) => u.name);
+          const acc2 = allAcc2.filter((u) => HR_RC_NAMES.has(u.name));
+          acc2Count = acc2.length;
+          users.push(...acc2);
+        }
       }
     } catch (e) {
+      account2Error = e instanceof Error ? e.message : String(e);
       console.error('[telegram/debug] Account2 error:', e);
     }
 
@@ -125,6 +173,12 @@ export async function GET() {
         hasPostgres: !!process.env.POSTGRES_URL,
         hasMonday: !!process.env.MONDAY_API_TOKEN,
       },
+      errors: {
+        tokenError: tokenError || undefined,
+        account2Error: account2Error || undefined,
+      },
+      account2RawCount,
+      account2UserNames,
     });
   } catch (err) {
     console.error('[telegram/debug] Error:', err);

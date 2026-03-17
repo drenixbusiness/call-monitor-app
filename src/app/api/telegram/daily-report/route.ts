@@ -95,31 +95,82 @@ interface UserWithExt {
   name: string;
 }
 
-async function fetchAccount1Users(base: string, clientId: string, clientSecret: string, jwt: string): Promise<UserWithExt[]> {
-  const tokenRes = await fetch(`${base}/api/token`, {
+const RC_TOKEN_URL = 'https://platform.ringcentral.com/restapi/oauth/token';
+const RC_BASE = 'https://platform.ringcentral.com/restapi';
+
+async function getAccount1Token(clientId: string, clientSecret: string, jwt: string): Promise<string | null> {
+  const encodedAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  const params = new URLSearchParams();
+  params.append('grant_type', 'urn:ietf:params:oauth:grant-type:jwt-bearer');
+  params.append('assertion', jwt);
+  const res = await fetch(RC_TOKEN_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clientId, clientSecret, jwt }),
+    headers: {
+      Authorization: `Basic ${encodedAuth}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: params.toString(),
   });
-  const tokenData = await tokenRes.json();
-  const token = tokenRes.ok ? tokenData.access_token : null;
+  const data = await res.json();
+  return res.ok ? data.access_token : null;
+}
+
+async function fetchAccount1Users(clientId: string, clientSecret: string, jwt: string): Promise<UserWithExt[]> {
+  const token = await getAccount1Token(clientId, clientSecret, jwt);
   if (!token) return [];
 
   const users: UserWithExt[] = [];
-  let nextUrl = `${base}/api/rc/v1.0/account/~/extension?type=User&status=Enabled&perPage=100&page=1`;
-  while (nextUrl) {
-    const res = await fetch(nextUrl, { headers: { 'x-rc-auth': token } });
+  let url: string | null = `${RC_BASE}/v1.0/account/~/extension?type=User&status=Enabled&perPage=100&page=1`;
+  while (url) {
+    const res: Response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) break;
-    const data = await res.json();
+    const data: { records?: any[]; navigation?: { nextPage?: { uri?: string } } } = await res.json();
     const records = data.records || [];
     for (const u of records) {
       if (WHITELIST_ACCOUNT1.includes(u.name) && HR_RC_NAMES.has(u.name)) {
         users.push({ id: String(u.id), name: u.name });
       }
     }
-    nextUrl = data.navigation?.nextPage?.uri
-      ? data.navigation.nextPage.uri.replace('https://platform.ringcentral.com/restapi', `${base}/api/rc`)
-      : '';
+    url = data.navigation?.nextPage?.uri || null;
+  }
+  return users;
+}
+
+async function fetchAccount2Users(): Promise<UserWithExt[]> {
+  const clientId = process.env.RC2_CLIENT_ID;
+  const clientSecret = process.env.RC2_CLIENT_SECRET;
+  const jwt = process.env.RC2_JWT;
+  if (!clientId || !clientSecret || !jwt) return [];
+
+  const encodedAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  const params = new URLSearchParams();
+  params.append('grant_type', 'urn:ietf:params:oauth:grant-type:jwt-bearer');
+  params.append('assertion', jwt);
+  const tokenRes = await fetch(RC_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${encodedAuth}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: params.toString(),
+  });
+  const tokenData = await tokenRes.json();
+  const token = tokenRes.ok ? tokenData.access_token : null;
+  if (!token) return [];
+
+  const users: UserWithExt[] = [];
+  let url: string | null = `${RC_BASE}/v1.0/account/~/extension?type=User&status=Enabled&perPage=100&page=1`;
+  while (url) {
+    const res: Response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) break;
+    const data: { records?: any[]; navigation?: { nextPage?: { uri?: string } } } = await res.json();
+    const records = data.records || [];
+    for (const u of records) {
+      if (HR_RC_NAMES.has(u.name)) {
+        users.push({ id: String(u.id), name: u.name });
+      }
+    }
+    url = data.navigation?.nextPage?.uri || null;
   }
   return users;
 }
@@ -164,20 +215,14 @@ export async function GET(request: Request) {
   let acc2Count = 0;
 
   if (rc1ClientId && rc1ClientSecret && rc1Jwt) {
-    const acc1Users = await fetchAccount1Users(base, rc1ClientId, rc1ClientSecret, rc1Jwt);
+    const acc1Users = await fetchAccount1Users(rc1ClientId, rc1ClientSecret, rc1Jwt);
     acc1Count = acc1Users.length;
     users.push(...acc1Users);
   }
 
-  const acc2Res = await fetch(`${base}/api/account2/users`);
-  if (acc2Res.ok) {
-    const acc2Data = await acc2Res.json();
-    const acc2 = (acc2Data.users || [])
-      .filter((u: any) => HR_RC_NAMES.has(u.name))
-      .map((u: any) => ({ id: String(u.id), name: u.name }));
-    acc2Count = acc2.length;
-    users.push(...acc2);
-  }
+  const acc2Users = await fetchAccount2Users();
+  acc2Count = acc2Users.length;
+  users.push(...acc2Users);
 
   const extIds = users.map((u) => u.id);
 
