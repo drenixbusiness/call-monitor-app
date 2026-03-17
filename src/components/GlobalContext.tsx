@@ -191,6 +191,7 @@ export function GlobalProvider({ children }: GlobalProviderProps) {
         }));
 
         const calls: WaitingCallRecord[] = [];
+        const seenSessionIds = new Set<string>();
         let page = 1;
         let hasMore = true;
 
@@ -213,6 +214,9 @@ export function GlobalProvider({ children }: GlobalProviderProps) {
           const records = data.records || [];
 
           records.forEach((call: any) => {
+            const sessionKey = call.sessionId ?? call.id;
+            if (seenSessionIds.has(sessionKey)) return;
+            seenSessionIds.add(sessionKey);
             calls.push({
               id: call.id,
               direction: call.direction,

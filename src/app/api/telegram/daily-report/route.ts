@@ -179,6 +179,7 @@ async function fetchAccount2Users(): Promise<UserWithExt[]> {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const debug = searchParams.get('debug') === '1';
+  const dateParam = searchParams.get('date');
 
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -202,9 +203,11 @@ export async function GET(request: Request) {
       ? `https://${process.env.VERCEL_URL}`
       : process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
 
-  // Report date: when cron runs at 23:00 UTC, use that UTC date for shift (8am–5pm US Central)
+  // Report date: when cron runs at 23:00 UTC, use that UTC date for shift. ?date=YYYY-MM-DD for testing.
   const now = new Date();
-  const reportDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const reportDate = dateParam
+    ? new Date(dateParam + 'T12:00:00Z')
+    : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const { from: shiftFrom, to: shiftTo } = getShiftWindowISO(reportDate);
   const { from: dayFrom, to: dayTo } = getReportDayRangeISO(reportDate);
 
@@ -230,13 +233,18 @@ export async function GET(request: Request) {
   const shiftFromDate = new Date(shiftFrom);
   const shiftToDate = new Date(shiftTo);
 
+  const fetchErrors: { extId: string; status?: number; error?: string }[] = [];
   const fetchCallsForUser = async (extId: string, token: string): Promise<void> => {
     let page = 1;
     let hasMore = true;
     while (hasMore) {
       const url = `${RC_BASE}/v1.0/account/~/extension/${encodeURIComponent(extId)}/call-log?view=Detailed&type=Voice&dateFrom=${encodeURIComponent(shiftFrom)}&dateTo=${encodeURIComponent(shiftTo)}&page=${page}&perPage=100`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) break;
+      if (!res.ok) {
+        const errText = await res.text();
+        fetchErrors.push({ extId, status: res.status, error: errText.slice(0, 200) });
+        break;
+      }
       const data: { records?: any[]; paging?: { page?: number; totalPages?: number } } = await res.json();
       const records = data.records || [];
       for (const c of records) {
@@ -427,8 +435,13 @@ export async function GET(request: Request) {
         total: users.length,
         extensionIds: users.map((u) => u.id),
       },
+      tokens: {
+        rc1: !!rc1Token,
+        rc2: !!rc2Token,
+      },
       calls: {
         fromRingCentral: allRecordsCount,
+        fetchErrors: fetchErrors.length ? fetchErrors : undefined,
       },
       env: {
         hasRc1: !!(rc1ClientId && rc1ClientSecret && rc1Jwt),
