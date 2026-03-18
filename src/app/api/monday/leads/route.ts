@@ -31,17 +31,35 @@ function ownerMatchesUser(ownerLead: string, userName: string): boolean {
 async function mondayGraphql(query: string, variables?: Record<string, unknown>) {
   const token = process.env.MONDAY_API_TOKEN;
   if (!token) throw new Error('MONDAY_API_TOKEN is not set');
-  const res = await fetch(MONDAY_API, {
-    method: 'POST',
-    headers: { Authorization: token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables }),
-    cache: 'no-store',
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Monday API error ${res.status}: ${text}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  try {
+    const res = await fetch(MONDAY_API, {
+      method: 'POST',
+      headers: { Authorization: token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, variables }),
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(`Monday API HTTP ${res.status}: ${JSON.stringify(data)}`);
+    }
+    if (data.errors?.length) {
+      const msg = data.errors.map((e: { message?: string }) => e.message).filter(Boolean).join('; ');
+      throw new Error(`Monday API: ${msg || JSON.stringify(data.errors)}`);
+    }
+    return data;
+  } catch (err: unknown) {
+    clearTimeout(timeout);
+    if (err instanceof Error) {
+      if (err.name === 'AbortError') throw new Error('Monday API timeout (30s). Check network.');
+      if (err.message.includes('fetch failed'))
+        throw new Error('Cannot reach Monday API. Check internet, firewall, or try a different network.');
+    }
+    throw err;
   }
-  return res.json();
 }
 
 /** This month's range in US Central. Start of 1st 00:00 to end of last day 23:59:59. */
@@ -293,13 +311,16 @@ export async function GET(request: Request) {
           if (title.includes('company')) company = val;
           if (title === 'date' && !title.includes('contact')) {
             date = val;
-            // Lead arrival is in US Central time
-            const rawDateStr = val || (() => {
-              try {
-                const v = typeof col.value === 'string' ? JSON.parse(col.value) : col.value;
-                return v?.date ?? v?.startDate ?? v?.start_date ?? '';
-              } catch { return ''; }
-            })();
+            // Lead arrival: prefer raw value (date+time) for accurate US Central parsing
+            let rawDateStr = '';
+            try {
+              const v = typeof col.value === 'string' ? JSON.parse(col.value) : col.value;
+              const d = v?.date ?? v?.startDate ?? v?.start_date ?? '';
+              const t = v?.time ?? v?.startTime ?? '';
+              rawDateStr = d && t ? `${d}T${t}` : d || val || '';
+            } catch {
+              rawDateStr = val || '';
+            }
             leadDateParsed = parseAsUSCentral(rawDateStr) ?? parseDateFromColumn(col) ?? parseDateColumn(val);
           }
           if (title.includes('platform')) platform = val;
