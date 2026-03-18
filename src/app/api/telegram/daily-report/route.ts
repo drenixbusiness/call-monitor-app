@@ -100,7 +100,7 @@ interface UserWithExt {
 
 const RC_TOKEN_URL = 'https://platform.ringcentral.com/restapi/oauth/token';
 const RC_BASE = 'https://platform.ringcentral.com/restapi';
-const RC_DELAY_MS = 1500;
+const RC_DELAY_MS = 800;
 const RC_429_RETRY_MS = 65000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -186,6 +186,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const debug = searchParams.get('debug') === '1' || searchParams.get('debug') === 'true';
   const dateParam = searchParams.get('date');
+  const skipAI = searchParams.get('skipAI') === '1' || searchParams.get('skipAI') === 'true';
 
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -305,18 +306,13 @@ export async function GET(request: Request) {
 
   const acc1UserList = users.slice(0, acc1Count);
   const acc2UserList = users.slice(acc1Count);
-  for (const u of acc1UserList) {
-    if (rc1Token) {
-      await fetchCallsForUser(u.id, rc1Token);
-      await sleep(RC_DELAY_MS);
-    }
-  }
-  for (const u of acc2UserList) {
-    if (rc2Token) {
-      await fetchCallsForUser(u.id, rc2Token);
-      await sleep(RC_DELAY_MS);
-    }
-  }
+  await Promise.all(
+    acc1UserList.map((u) => (rc1Token ? fetchCallsForUser(u.id, rc1Token) : Promise.resolve()))
+  );
+  await sleep(RC_DELAY_MS);
+  await Promise.all(
+    acc2UserList.map((u) => (rc2Token ? fetchCallsForUser(u.id, rc2Token) : Promise.resolve()))
+  );
 
   const allRecordsCount = callRecords.length;
 
@@ -426,7 +422,7 @@ export async function GET(request: Request) {
     statsList.push(s);
   }
 
-  const aiReport = await fetchAIReport(statsList, {
+  const aiReport = skipAI ? null : await fetchAIReport(statsList, {
     talk: totalTalk,
     total: totalLeads,
     onTime: totalOnTime,
@@ -465,7 +461,7 @@ export async function GET(request: Request) {
   if (debug) {
     return NextResponse.json({
       debug: true,
-      hint: 'For manual trigger, add ?date=YYYY-MM-DD (e.g. ?date=2026-03-17) to report that day.',
+      hint: 'Add ?date=YYYY-MM-DD for a specific day. Add ?skipAI=1 to skip AI (faster, avoids timeout).',
       reportDate: reportDateStr,
       shiftWindow: { from: shiftFrom, to: shiftTo },
       leadDayRange: { from: dayFrom, to: dayTo },
