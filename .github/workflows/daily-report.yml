@@ -1,0 +1,48 @@
+name: HR Daily Report
+
+on:
+  schedule:
+    # 4am Tashkent = 23:00 UTC. Mon-Sat (1-6)
+    - cron: '0 23 * * 1-6'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Report date (YYYY-MM-DD). Leave empty for auto.'
+        required: false
+      skip_ai:
+        description: 'Skip AI (1 = yes)'
+        required: false
+        default: '0'
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NODE_VERSION: '20'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Run daily report
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RC_CLIENT_ID: ${{ secrets.RC_CLIENT_ID }}
+          RC_CLIENT_SECRET: ${{ secrets.RC_CLIENT_SECRET }}
+          RC_JWT: ${{ secrets.RC_JWT }}
+          RC2_CLIENT_ID: ${{ secrets.RC2_CLIENT_ID }}
+          RC2_CLIENT_SECRET: ${{ secrets.RC2_CLIENT_SECRET }}
+          RC2_JWT: ${{ secrets.RC2_JWT }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          APP_URL: ${{ secrets.APP_URL || 'https://call-monitor-app.vercel.app' }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          REPORT_DATE: ${{ github.event.inputs.date }}
+          SKIP_AI: ${{ github.event.inputs.skip_ai }}
+        run: node scripts/daily-report.mjs
