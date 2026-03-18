@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getShiftWindowISO, getReportDayRangeISO, getShiftHours } from '@/utils/leadShift';
+
+export const maxDuration = 60;
 import { WHITELIST_ACCOUNT1 } from '@/lib/whitelist';
 
 type UserStats = {
@@ -98,7 +100,7 @@ interface UserWithExt {
 
 const RC_TOKEN_URL = 'https://platform.ringcentral.com/restapi/oauth/token';
 const RC_BASE = 'https://platform.ringcentral.com/restapi';
-const RC_DELAY_MS = 2500;
+const RC_DELAY_MS = 1500;
 const RC_429_RETRY_MS = 65000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -354,50 +356,49 @@ export async function GET(request: Request) {
   ];
 
   const leadsDebug: Record<string, { count: number; ok: boolean; status?: number; error?: string }> = {};
-  for (const { rcName, mondayUser } of HR_RECRUITERS) {
-    const userEntry = users.find((u) => u.name === rcName);
-    const key = userEntry ? normalizeExt(userEntry.id) : rcName;
-    if (!statsByUser[key]) {
-      statsByUser[key] = {
-        name: rcName,
-        talkMinutes: 0,
-        leadsTotal: 0,
-        leadsOnTime: 0,
-        leadsLate: 0,
-        callsConnected: 0,
-        callsMissed: 0,
-        leadsRejected: 0,
-      };
-    }
-    const s = statsByUser[key];
-
-    try {
-      const leadsUrl = `${base}/api/monday/leads?user=${encodeURIComponent(mondayUser)}&dateFrom=${encodeURIComponent(dayFrom)}&dateTo=${encodeURIComponent(dayTo)}`;
-      const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
-      const leadsRes = await fetch(leadsUrl, {
-        headers: bypassSecret ? { 'x-vercel-protection-bypass': bypassSecret } : undefined,
-      });
-      if (!leadsRes.ok) {
-        const errText = await leadsRes.text();
-        leadsDebug[rcName] = { count: 0, ok: false, status: leadsRes.status, error: errText.slice(0, 150) };
-        continue;
+  const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+  const leadsResults = await Promise.all(
+    HR_RECRUITERS.map(async ({ rcName, mondayUser }) => {
+      const userEntry = users.find((u) => u.name === rcName);
+      const key = userEntry ? normalizeExt(userEntry.id) : rcName;
+      if (!statsByUser[key]) {
+        statsByUser[key] = {
+          name: rcName,
+          talkMinutes: 0,
+          leadsTotal: 0,
+          leadsOnTime: 0,
+          leadsLate: 0,
+          callsConnected: 0,
+          callsMissed: 0,
+          leadsRejected: 0,
+        };
       }
-      const leadsData = await leadsRes.json();
-      const leads = leadsData.leads || [];
-
-      for (const lead of leads) {
-        s.leadsTotal += 1;
-        if (lead.timing === 'On time') s.leadsOnTime += 1;
-        else if (lead.timing === 'Late') s.leadsLate += 1;
-        if (lead.status === 'Rejected') s.leadsRejected += 1;
+      const s = statsByUser[key];
+      try {
+        const leadsUrl = `${base}/api/monday/leads?user=${encodeURIComponent(mondayUser)}&dateFrom=${encodeURIComponent(dayFrom)}&dateTo=${encodeURIComponent(dayTo)}`;
+        const leadsRes = await fetch(leadsUrl, {
+          headers: bypassSecret ? { 'x-vercel-protection-bypass': bypassSecret } : undefined,
+        });
+        if (!leadsRes.ok) {
+          const errText = await leadsRes.text();
+          return { rcName, debug: { count: 0, ok: false, status: leadsRes.status, error: errText.slice(0, 150) } };
+        }
+        const leadsData = await leadsRes.json();
+        const leads = leadsData.leads || [];
+        for (const lead of leads) {
+          s.leadsTotal += 1;
+          if (lead.timing === 'On time') s.leadsOnTime += 1;
+          else if (lead.timing === 'Late') s.leadsLate += 1;
+          if (lead.status === 'Rejected') s.leadsRejected += 1;
+        }
+        return { rcName, debug: { count: leads.length, ok: true } };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        return { rcName, debug: { count: 0, ok: false, error: String(msg).slice(0, 150) } };
       }
-      leadsDebug[rcName] = { count: leads.length, ok: true };
-      await sleep(400);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      leadsDebug[rcName] = { count: 0, ok: false, error: String(msg).slice(0, 150) };
-    }
-  }
+    })
+  );
+  for (const { rcName, debug } of leadsResults) leadsDebug[rcName] = debug;
 
   const reportDateStr = reportDate.toISOString().slice(0, 10);
 
