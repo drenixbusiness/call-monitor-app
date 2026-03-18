@@ -373,7 +373,10 @@ export async function GET(request: Request) {
 
     try {
       const leadsUrl = `${base}/api/monday/leads?user=${encodeURIComponent(mondayUser)}&dateFrom=${encodeURIComponent(dayFrom)}&dateTo=${encodeURIComponent(dayTo)}`;
-      const leadsRes = await fetch(leadsUrl);
+      const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+      const leadsRes = await fetch(leadsUrl, {
+        headers: bypassSecret ? { 'x-vercel-protection-bypass': bypassSecret } : undefined,
+      });
       if (!leadsRes.ok) {
         const errText = await leadsRes.text();
         leadsDebug[rcName] = { count: 0, ok: false, status: leadsRes.status, error: errText.slice(0, 150) };
