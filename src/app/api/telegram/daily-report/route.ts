@@ -182,7 +182,7 @@ async function fetchAccount2Users(): Promise<UserWithExt[]> {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const debug = searchParams.get('debug') === '1';
+  const debug = searchParams.get('debug') === '1' || searchParams.get('debug') === 'true';
   const dateParam = searchParams.get('date');
 
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -353,6 +353,7 @@ export async function GET(request: Request) {
     { rcName: 'Jessica Miller', mondayUser: 'Jessica' },
   ];
 
+  const leadsDebug: Record<string, { count: number; ok: boolean; status?: number; error?: string }> = {};
   for (const { rcName, mondayUser } of HR_RECRUITERS) {
     const userEntry = users.find((u) => u.name === rcName);
     const key = userEntry ? normalizeExt(userEntry.id) : rcName;
@@ -371,10 +372,13 @@ export async function GET(request: Request) {
     const s = statsByUser[key];
 
     try {
-      const leadsRes = await fetch(
-        `${base}/api/monday/leads?user=${encodeURIComponent(mondayUser)}&dateFrom=${encodeURIComponent(dayFrom)}&dateTo=${encodeURIComponent(dayTo)}`
-      );
-      if (!leadsRes.ok) continue;
+      const leadsUrl = `${base}/api/monday/leads?user=${encodeURIComponent(mondayUser)}&dateFrom=${encodeURIComponent(dayFrom)}&dateTo=${encodeURIComponent(dayTo)}`;
+      const leadsRes = await fetch(leadsUrl);
+      if (!leadsRes.ok) {
+        const errText = await leadsRes.text();
+        leadsDebug[rcName] = { count: 0, ok: false, status: leadsRes.status, error: errText.slice(0, 150) };
+        continue;
+      }
       const leadsData = await leadsRes.json();
       const leads = leadsData.leads || [];
 
@@ -384,9 +388,11 @@ export async function GET(request: Request) {
         else if (lead.timing === 'Late') s.leadsLate += 1;
         if (lead.status === 'Rejected') s.leadsRejected += 1;
       }
+      leadsDebug[rcName] = { count: leads.length, ok: true };
       await sleep(400);
-    } catch {
-      // skip on error
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      leadsDebug[rcName] = { count: 0, ok: false, error: String(msg).slice(0, 150) };
     }
   }
 
@@ -472,6 +478,10 @@ export async function GET(request: Request) {
       calls: {
         fromRingCentral: allRecordsCount,
         fetchErrors: fetchErrors.length ? fetchErrors : undefined,
+      },
+      leads: {
+        dayRange: { from: dayFrom, to: dayTo },
+        perUser: leadsDebug,
       },
       env: {
         hasRc1: !!(rc1ClientId && rc1ClientSecret && rc1Jwt),
