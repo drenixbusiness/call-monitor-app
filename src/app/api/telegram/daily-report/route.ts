@@ -105,7 +105,11 @@ const RC_429_RETRY_MS = 65000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function getAccount1Token(clientId: string, clientSecret: string, jwt: string): Promise<string | null> {
+async function getAccount1Token(
+  clientId: string,
+  clientSecret: string,
+  jwt: string
+): Promise<{ token: string | null; error?: string }> {
   const encodedAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
   const params = new URLSearchParams();
   params.append('grant_type', 'urn:ietf:params:oauth:grant-type:jwt-bearer');
@@ -119,11 +123,13 @@ async function getAccount1Token(clientId: string, clientSecret: string, jwt: str
     body: params.toString(),
   });
   const data = await res.json();
-  return res.ok ? data.access_token : null;
+  if (res.ok) return { token: data.access_token };
+  const err = data.error_description || data.error || JSON.stringify(data);
+  return { token: null, error: String(err).slice(0, 200) };
 }
 
 async function fetchAccount1Users(clientId: string, clientSecret: string, jwt: string): Promise<UserWithExt[]> {
-  const token = await getAccount1Token(clientId, clientSecret, jwt);
+  const { token } = await getAccount1Token(clientId, clientSecret, jwt);
   if (!token) return [];
 
   const users: UserWithExt[] = [];
@@ -288,7 +294,10 @@ export async function GET(request: Request) {
     }
   };
 
-  const rc1Token = rc1ClientId && rc1ClientSecret && rc1Jwt ? await getAccount1Token(rc1ClientId, rc1ClientSecret, rc1Jwt) : null;
+  const rc1Result =
+    rc1ClientId && rc1ClientSecret && rc1Jwt ? await getAccount1Token(rc1ClientId, rc1ClientSecret, rc1Jwt) : null;
+  const rc1Token = rc1Result?.token ?? null;
+  const rc1TokenError = rc1Result?.error;
   let rc2Token: string | null = null;
   if (process.env.RC2_CLIENT_ID && process.env.RC2_CLIENT_SECRET && process.env.RC2_JWT) {
     const enc = Buffer.from(`${process.env.RC2_CLIENT_ID}:${process.env.RC2_CLIENT_SECRET}`).toString('base64');
@@ -474,6 +483,7 @@ export async function GET(request: Request) {
       tokens: {
         rc1: !!rc1Token,
         rc2: !!rc2Token,
+        rc1Error: rc1TokenError || undefined,
       },
       calls: {
         fromRingCentral: allRecordsCount,
