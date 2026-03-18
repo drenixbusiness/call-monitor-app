@@ -17,9 +17,9 @@ on:
 jobs:
   report:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
-      NODE_VERSION: '20'
+      NODE_VERSION: '22'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
