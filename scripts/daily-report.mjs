@@ -223,8 +223,9 @@ async function main() {
   const acc2Users = await fetchAccount2Users();
   users.push(...acc2Users);
 
-  const callRecords = [];
+  const callRecordsByExt = {};
   const fetchCallsForUser = async (extId, rcToken) => {
+    const sessionMap = new Map();
     let page = 1;
     let hasMore = true;
     while (hasMore) {
@@ -241,15 +242,20 @@ async function main() {
         const startTime = c.startTime ? new Date(c.startTime) : null;
         if (!startTime || isNaN(startTime.getTime())) continue;
         if (startTime < shiftFromDate || startTime > shiftToDate) continue;
-        if (c.result === 'Missed') callRecords.push({ ...c, extension: { id: extId } });
-        else if ((c.result === 'Accepted' || c.result === 'Call connected') && (c.duration || 0) >= 20) {
-          callRecords.push({ ...c, extension: { id: extId } });
+        const sessionKey = c.sessionId ?? c.id;
+        const rec = { ...c, extension: { id: extId } };
+        if (c.result === 'Missed') {
+          if (!sessionMap.has(sessionKey)) sessionMap.set(sessionKey, rec);
+        } else if ((c.result === 'Accepted' || c.result === 'Call connected') && (c.duration || 0) >= 20) {
+          const existing = sessionMap.get(sessionKey);
+          if (!existing || (c.duration || 0) > (existing.duration || 0)) sessionMap.set(sessionKey, rec);
         }
       }
       hasMore = records.length === 100;
       page++;
       if (page > 50) break;
     }
+    callRecordsByExt[extId] = sessionMap;
   };
 
   let rc1Token = null;
@@ -276,6 +282,11 @@ async function main() {
   await Promise.all(acc1UserList.map((u) => (rc1Token ? fetchCallsForUser(u.id, rc1Token) : Promise.resolve())));
   await sleep(RC_DELAY_MS);
   await Promise.all(acc2UserList.map((u) => (rc2Token ? fetchCallsForUser(u.id, rc2Token) : Promise.resolve())));
+
+  const callRecords = [];
+  for (const m of Object.values(callRecordsByExt)) {
+    for (const rec of m.values()) callRecords.push(rec);
+  }
 
   const normalizeExt = (id) => String(id).replace(/\.0$/, '');
   const statsByUser = {};

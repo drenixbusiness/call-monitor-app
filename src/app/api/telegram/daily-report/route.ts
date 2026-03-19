@@ -256,12 +256,14 @@ export async function GET(request: Request) {
   users.push(...acc2Users);
 
   // Fetch calls directly from RingCentral (no DB dependency) - same as dashboard's Waiting view
-  const callRecords: any[] = [];
+  // Deduplicate by sessionId (RC returns multiple legs per call) - match dashboard behavior
+  const callRecordsByExt: Record<string, Map<string, any>> = {};
   const shiftFromDate = new Date(shiftFrom);
   const shiftToDate = new Date(shiftTo);
 
   const fetchErrors: { extId: string; status?: number; error?: string }[] = [];
   const fetchCallsForUser = async (extId: string, token: string): Promise<void> => {
+    const sessionMap = new Map<string, any>();
     let page = 1;
     let hasMore = true;
     while (hasMore) {
@@ -282,16 +284,20 @@ export async function GET(request: Request) {
         const startTime = c.startTime ? new Date(c.startTime) : null;
         if (!startTime || isNaN(startTime.getTime())) continue;
         if (startTime < shiftFromDate || startTime > shiftToDate) continue;
+        const sessionKey = c.sessionId ?? c.id;
+        const rec = { ...c, extension: { id: extId } };
         if (c.result === 'Missed') {
-          callRecords.push({ ...c, extension: { id: extId } });
+          if (!sessionMap.has(sessionKey)) sessionMap.set(sessionKey, rec);
         } else if ((c.result === 'Accepted' || c.result === 'Call connected') && (c.duration || 0) >= 20) {
-          callRecords.push({ ...c, extension: { id: extId } });
+          const existing = sessionMap.get(sessionKey);
+          if (!existing || (c.duration || 0) > (existing.duration || 0)) sessionMap.set(sessionKey, rec);
         }
       }
       hasMore = records.length === 100;
       page++;
       if (page > 50) break;
     }
+    callRecordsByExt[extId] = sessionMap;
   };
 
   const rc1Result =
@@ -323,6 +329,10 @@ export async function GET(request: Request) {
     acc2UserList.map((u) => (rc2Token ? fetchCallsForUser(u.id, rc2Token) : Promise.resolve()))
   );
 
+  const callRecords: any[] = [];
+  for (const m of Object.values(callRecordsByExt)) {
+    for (const rec of m.values()) callRecords.push(rec);
+  }
   const allRecordsCount = callRecords.length;
 
   const normalizeExt = (id: string | number) => String(id).replace(/\.0$/, '');
