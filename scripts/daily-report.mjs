@@ -63,6 +63,16 @@ function getReportDayRangeISO(reportDate) {
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
+/** Matches dashboard "March 18–19" (Tashkent UTC+5): Mar 18 00:00 to Mar 19 23:59 Tashkent = Mar 17 19:00 to Mar 19 18:59 UTC */
+function getReportCallsRangeTashkentISO(reportDate) {
+  const y = reportDate.getUTCFullYear();
+  const m = reportDate.getUTCMonth();
+  const d = reportDate.getUTCDate();
+  const from = new Date(Date.UTC(y, m, d - 1, 19, 0, 0, 0));
+  const to = new Date(Date.UTC(y, m, d + 1, 18, 59, 59, 999));
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+
 async function getAccount1Token(clientId, clientSecret, jwt) {
   const encodedAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
   const params = new URLSearchParams();
@@ -204,10 +214,10 @@ async function main() {
     }
   }
 
-  const { from: shiftFrom, to: shiftTo } = getShiftWindowISO(reportDate);
+  const { from: callsFrom, to: callsTo } = getReportCallsRangeTashkentISO(reportDate);
   const { from: dayFrom, to: dayTo } = getReportDayRangeISO(reportDate);
-  const shiftFromDate = new Date(shiftFrom);
-  const shiftToDate = new Date(shiftTo);
+  const callsFromDate = new Date(callsFrom);
+  const callsToDate = new Date(callsTo);
 
   const rc1ClientId = process.env.RC_CLIENT_ID || process.env.NEXT_PUBLIC_RC_CLIENT_ID;
   const rc1ClientSecret = process.env.RC_CLIENT_SECRET || process.env.NEXT_PUBLIC_RC_CLIENT_SECRET;
@@ -229,7 +239,7 @@ async function main() {
     let page = 1;
     let hasMore = true;
     while (hasMore) {
-      const url = `${RC_BASE}/v1.0/account/~/extension/${encodeURIComponent(extId)}/call-log?view=Detailed&type=Voice&dateFrom=${encodeURIComponent(shiftFrom)}&dateTo=${encodeURIComponent(shiftTo)}&page=${page}&perPage=100`;
+      const url = `${RC_BASE}/v1.0/account/~/extension/${encodeURIComponent(extId)}/call-log?view=Detailed&type=Voice&dateFrom=${encodeURIComponent(callsFrom)}&dateTo=${encodeURIComponent(callsTo)}&page=${page}&perPage=100`;
       let res = await fetch(url, { headers: { Authorization: `Bearer ${rcToken}` } });
       if (res.status === 429) {
         await sleep(RC_429_RETRY_MS);
@@ -241,12 +251,12 @@ async function main() {
       for (const c of records) {
         const startTime = c.startTime ? new Date(c.startTime) : null;
         if (!startTime || isNaN(startTime.getTime())) continue;
-        if (startTime < shiftFromDate || startTime > shiftToDate) continue;
+        if (startTime < callsFromDate || startTime > callsToDate) continue;
         const sessionKey = c.sessionId ?? c.id;
         const rec = { ...c, extension: { id: extId } };
         if (c.result === 'Missed') {
           if (!sessionMap.has(sessionKey)) sessionMap.set(sessionKey, rec);
-        } else if ((c.result === 'Accepted' || c.result === 'Call connected') && (c.duration || 0) >= 20) {
+        } else if (c.result === 'Accepted' || c.result === 'Call connected') {
           const existing = sessionMap.get(sessionKey);
           if (!existing || (c.duration || 0) > (existing.duration || 0)) sessionMap.set(sessionKey, rec);
         }

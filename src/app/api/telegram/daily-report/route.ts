@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getShiftWindowISO, getReportDayRangeISO, getShiftHours } from '@/utils/leadShift';
+import { getShiftWindowISO, getReportDayRangeISO, getShiftHours, getReportCallsRangeTashkentISO } from '@/utils/leadShift';
 
 export const maxDuration = 60;
 import { WHITELIST_ACCOUNT1 } from '@/lib/whitelist';
@@ -236,6 +236,7 @@ export async function GET(request: Request) {
     }
   }
   const { from: shiftFrom, to: shiftTo } = getShiftWindowISO(reportDate);
+  const { from: callsFrom, to: callsTo } = getReportCallsRangeTashkentISO(reportDate);
   const { from: dayFrom, to: dayTo } = getReportDayRangeISO(reportDate);
 
   const rc1ClientId = process.env.RC_CLIENT_ID || process.env.NEXT_PUBLIC_RC_CLIENT_ID;
@@ -258,8 +259,8 @@ export async function GET(request: Request) {
   // Fetch calls directly from RingCentral (no DB dependency) - same as dashboard's Waiting view
   // Deduplicate by sessionId (RC returns multiple legs per call) - match dashboard behavior
   const callRecordsByExt: Record<string, Map<string, any>> = {};
-  const shiftFromDate = new Date(shiftFrom);
-  const shiftToDate = new Date(shiftTo);
+  const callsFromDate = new Date(callsFrom);
+  const callsToDate = new Date(callsTo);
 
   const fetchErrors: { extId: string; status?: number; error?: string }[] = [];
   const fetchCallsForUser = async (extId: string, token: string): Promise<void> => {
@@ -267,7 +268,7 @@ export async function GET(request: Request) {
     let page = 1;
     let hasMore = true;
     while (hasMore) {
-      const url = `${RC_BASE}/v1.0/account/~/extension/${encodeURIComponent(extId)}/call-log?view=Detailed&type=Voice&dateFrom=${encodeURIComponent(shiftFrom)}&dateTo=${encodeURIComponent(shiftTo)}&page=${page}&perPage=100`;
+      const url = `${RC_BASE}/v1.0/account/~/extension/${encodeURIComponent(extId)}/call-log?view=Detailed&type=Voice&dateFrom=${encodeURIComponent(callsFrom)}&dateTo=${encodeURIComponent(callsTo)}&page=${page}&perPage=100`;
       let res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (res.status === 429) {
         await sleep(RC_429_RETRY_MS);
@@ -283,12 +284,12 @@ export async function GET(request: Request) {
       for (const c of records) {
         const startTime = c.startTime ? new Date(c.startTime) : null;
         if (!startTime || isNaN(startTime.getTime())) continue;
-        if (startTime < shiftFromDate || startTime > shiftToDate) continue;
+        if (startTime < callsFromDate || startTime > callsToDate) continue;
         const sessionKey = c.sessionId ?? c.id;
         const rec = { ...c, extension: { id: extId } };
         if (c.result === 'Missed') {
           if (!sessionMap.has(sessionKey)) sessionMap.set(sessionKey, rec);
-        } else if ((c.result === 'Accepted' || c.result === 'Call connected') && (c.duration || 0) >= 20) {
+        } else if (c.result === 'Accepted' || c.result === 'Call connected') {
           const existing = sessionMap.get(sessionKey);
           if (!existing || (c.duration || 0) > (existing.duration || 0)) sessionMap.set(sessionKey, rec);
         }
@@ -483,6 +484,7 @@ export async function GET(request: Request) {
       hint: 'Add ?date=YYYY-MM-DD for a specific day. Add ?skipAI=1 to skip AI (faster, avoids timeout).',
       reportDate: reportDateStr,
       shiftWindow: { from: shiftFrom, to: shiftTo },
+      callsRange: { from: callsFrom, to: callsTo },
       leadDayRange: { from: dayFrom, to: dayTo },
       users: {
         account1: acc1Count,

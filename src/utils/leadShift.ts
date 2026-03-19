@@ -168,6 +168,20 @@ export function getLeadTiming(
 }
 
 /**
+ * Get calls range that matches dashboard "March 18–19" (Tashkent UTC+5).
+ * Shift 7pm Mar 18 – 4am Mar 19 Tashkent spans two calendar days.
+ * Dashboard selects Mar 18–19 → Mar 18 00:00 to Mar 19 23:59 Tashkent = Mar 17 19:00 to Mar 19 18:59 UTC.
+ */
+export function getReportCallsRangeTashkentISO(reportDate: Date): { from: string; to: string } {
+  const y = reportDate.getUTCFullYear();
+  const m = reportDate.getUTCMonth();
+  const d = reportDate.getUTCDate();
+  const from = new Date(Date.UTC(y, m, d - 1, 19, 0, 0, 0));
+  const to = new Date(Date.UTC(y, m, d + 1, 18, 59, 59, 999));
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+
+/**
  * Get shift window (CDT: 9am–6pm, CST: 8am–5pm US Central) for a given date as ISO strings.
  * Matches Tashkent 7pm–4am. Used for daily report: reportDate = UTC date when cron runs.
  */
