@@ -454,20 +454,23 @@ export async function GET(request: Request) {
 
   const { start } = getShiftHours(reportDate);
   const shiftLabel = start === 9 ? '9am–6pm' : '8am–5pm';
+  const adviceByName = aiReport
+    ? Object.fromEntries(aiReport.advice.map((a) => [a.name, a.advice]))
+    : ({} as Record<string, string>);
+
   let msg = `📊 *HR Daily Report — ${reportDateStr}*\n`;
   msg += `Shift: ${shiftLabel} US Central (7pm–4am Tashkent)\n\n`;
 
   for (const s of statsList) {
     msg += `👤 *${s.name}*\n`;
-    msg += `   Talk: ${s.talkMinutes} min | Leads: ${s.leadsTotal} total (${s.leadsOnTime} on-time, ${s.leadsLate} late) | Calls: ${s.callsConnected} connected, ${s.callsMissed} missed | Rejected: ${s.leadsRejected}\n\n`;
+    msg += `   Talk: ${s.talkMinutes} min | Leads: ${s.leadsTotal} total (${s.leadsOnTime} on-time, ${s.leadsLate} late) | Calls: ${s.callsConnected} connected, ${s.callsMissed} missed | Rejected: ${s.leadsRejected}\n`;
+    const adv = adviceByName[s.name];
+    if (adv) msg += `   💡 *Advice:* ${adv}\n`;
+    msg += `\n`;
   }
 
   if (aiReport) {
     msg += `📋 *Daily Outcome*\n${aiReport.dailyOutcome}\n\n`;
-    msg += `💡 *Advice*\n`;
-    for (const { name, advice } of aiReport.advice) {
-      msg += `👤 *${name}*: ${advice}\n\n`;
-    }
   }
 
   msg += `📈 *TOTAL (5 users)*\n`;
