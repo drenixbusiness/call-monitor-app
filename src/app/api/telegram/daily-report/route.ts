@@ -465,7 +465,7 @@ export async function GET(request: Request) {
     msg += `👤 *${s.name}*\n`;
     msg += `   Talk: ${s.talkMinutes} min | Leads: ${s.leadsTotal} total (${s.leadsOnTime} on-time, ${s.leadsLate} late) | Calls: ${s.callsConnected} connected, ${s.callsMissed} missed | Rejected: ${s.leadsRejected}\n`;
     const adv = adviceByName[s.name];
-    if (adv) msg += `   💡 *Advice:* ${adv}\n`;
+    if (adv) msg += `\n   💡 *Advice:* ${adv}\n`;
     msg += `\n`;
   }
 
