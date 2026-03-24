@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
+import { getServerDeployAccount } from '@/lib/deployAccount';
 
 const RC_BASE = 'https://platform.ringcentral.com/restapi';
 const DELAY_BETWEEN_REQUESTS_MS = 1200;
@@ -75,7 +76,7 @@ async function syncAccount(
             INSERT INTO calls 
             (id, call_id, from_number, to_number, direction, result, user_extension, start_time, duration, recording_url, account)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            ON CONFLICT (call_id) DO NOTHING
+            ON CONFLICT (id) DO NOTHING
           `).run([
             `${c.id}-${c.sessionId}`,
             c.id,
@@ -185,21 +186,29 @@ export async function POST(request: Request) {
     const lastRequestTime = { value: 0 };
 
     try {
-      // Sync account 1
-      const inserted1 = await syncAccount(token, extIdStrings, 'account1', perExtensionInserted, lastRequestTime);
-      totalInserted += inserted1;
+      const deploy = getServerDeployAccount();
 
-      // Sync account 2
-      const token2 = await getTokenForAccount2();
-      if (!token2) {
-        console.log('[sync] Account 2: No token (missing RC2_* env vars or token failed)');
+      if (deploy === 'account1') {
+        const inserted = await syncAccount(token, extIdStrings, 'account1', perExtensionInserted, lastRequestTime);
+        totalInserted += inserted;
+      } else if (deploy === 'account2') {
+        const inserted = await syncAccount(token, extIdStrings, 'account2', perExtensionInserted, lastRequestTime);
+        totalInserted += inserted;
       } else {
-        const extIds2 = await getExtensionsForAccount(token2);
-        console.log('[sync] Account 2: Found', extIds2.length, 'extensions to sync');
-        if (extIds2.length > 0) {
-          const inserted2 = await syncAccount(token2, extIds2, 'account2', perExtensionInserted, lastRequestTime);
-          totalInserted += inserted2;
-          console.log('[sync] Account 2: Inserted', inserted2, 'calls');
+        const inserted1 = await syncAccount(token, extIdStrings, 'account1', perExtensionInserted, lastRequestTime);
+        totalInserted += inserted1;
+
+        const token2 = await getTokenForAccount2();
+        if (!token2) {
+          console.log('[sync] Account 2: No token (missing RC2_* env vars or token failed)');
+        } else {
+          const extIds2 = await getExtensionsForAccount(token2);
+          console.log('[sync] Account 2: Found', extIds2.length, 'extensions to sync');
+          if (extIds2.length > 0) {
+            const inserted2 = await syncAccount(token2, extIds2, 'account2', perExtensionInserted, lastRequestTime);
+            totalInserted += inserted2;
+            console.log('[sync] Account 2: Inserted', inserted2, 'calls');
+          }
         }
       }
     } finally {

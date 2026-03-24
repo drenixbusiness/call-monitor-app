@@ -8,7 +8,8 @@ export default function ConfigPanel({
   onLoad,
   isLoading,
   loadingMsg,
-  error
+  error,
+  deployHint,
 }: {
   credentials: any;
   onChange: (field: string, value: string) => void;
@@ -16,6 +17,7 @@ export default function ConfigPanel({
   isLoading: boolean;
   loadingMsg: string;
   error: string | null;
+  deployHint?: string;
 }) {
   return (
     <Box sx={{ 
@@ -29,9 +31,15 @@ export default function ConfigPanel({
         border: '1px solid var(--border)',
         animation: 'fadeUp 0.6s ease-out forwards'
     }}>
-      <Typography variant="h5" sx={{ mb: 4, fontWeight: 700 }}>
+      <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
         API Configuration
       </Typography>
+
+      {deployHint && (
+        <Typography sx={{ mb: 3, fontSize: '0.9rem', color: 'var(--text2)', lineHeight: 1.5 }}>
+          {deployHint}
+        </Typography>
+      )}
 
       {error && (
         <Alert severity="error" sx={{ mb: 4, backgroundColor: 'rgba(255, 69, 102, 0.1)', color: 'var(--red)', border: '1px solid var(--red)' }}>

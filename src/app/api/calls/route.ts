@@ -1,10 +1,27 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
+import { getServerDeployAccount } from '@/lib/deployAccount';
+
+function accountWhereSql(account: 'account1' | 'account2'): string {
+  // Legacy rows may lack `account`; treat those as account1 (BP).
+  if (account === 'account1') {
+    return ` AND (account = 'account1' OR account IS NULL)`;
+  }
+  return ` AND account = 'account2'`;
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const range = searchParams.get('range') || 'all';
   const extensionIds = searchParams.get('extensionIds')?.split(',') || [];
+
+  const deploy = getServerDeployAccount();
+  let accountFilter: 'account1' | 'account2' | null = deploy;
+  if (!accountFilter) {
+    const q = searchParams.get('account');
+    if (q === 'account1' || q === 'account2') accountFilter = q;
+  }
+  const accountSql = accountFilter ? accountWhereSql(accountFilter) : '';
 
   if (!extensionIds.length) {
     return NextResponse.json({ error: 'Missing extensionIds' }, { status: 400 });
@@ -54,7 +71,7 @@ export async function GET(request: Request) {
       }
       const query = `
         SELECT * FROM calls 
-        WHERE ${conditions.join(' AND ')}
+        WHERE ${conditions.join(' AND ')}${accountSql}
         ORDER BY start_time DESC
       `;
       const result = await db.prepare(query).all(params as [string[], ...string[]]);
@@ -62,7 +79,7 @@ export async function GET(request: Request) {
     } else {
       const query = `
         SELECT * FROM calls 
-        WHERE REPLACE(user_extension, '.0', '') = ANY($1::text[])
+        WHERE REPLACE(user_extension, '.0', '') = ANY($1::text[])${accountSql}
         ORDER BY start_time DESC
       `;
       const result = await db.prepare(query).all([normalizedIds]);

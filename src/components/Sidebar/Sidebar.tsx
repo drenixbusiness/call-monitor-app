@@ -7,7 +7,8 @@ import { useState, useMemo } from 'react';
 import SearchIcon from '@mui/icons-material/Search';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BarChartIcon from '@mui/icons-material/BarChart';
-import { MONDAY_USERS } from '@/components/MondaySidebar/MondaySidebar';
+import { getClientDeployAccount } from '@/lib/deployAccount';
+import { getMondayUsersForDeploy } from '@/lib/whitelist';
 
 export default function Sidebar({
   users,
@@ -19,6 +20,7 @@ export default function Sidebar({
   onSelectMondayLeads,
   selectedMondayUser,
   onSelectMondayUser,
+  mondayUsers: mondayUsersProp,
 }: {
   users: RCUser[];
   allCalls: UserCalls;
@@ -29,7 +31,10 @@ export default function Sidebar({
   onSelectMondayLeads?: () => void;
   selectedMondayUser?: string | null;
   onSelectMondayUser?: (user: string) => void;
+  /** Monday Leads names for this deployment; defaults from env. */
+  mondayUsers?: readonly string[];
 }) {
+  const mondayUsers = [...(mondayUsersProp ?? getMondayUsersForDeploy(getClientDeployAccount()))];
   const [search, setSearch] = useState('');
 
   const filteredUsers = useMemo(() => {
@@ -135,7 +140,7 @@ export default function Sidebar({
       <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Box sx={{ p: 2, borderBottom: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text2)', letterSpacing: '1px' }}>
-            USERS &middot; {isMondayLeads ? MONDAY_USERS.length : filteredUsers.length}
+            USERS &middot; {isMondayLeads ? mondayUsers.length : filteredUsers.length}
           </Typography>
           {!isMondayLeads && (
             <TextField
@@ -173,7 +178,7 @@ export default function Sidebar({
 
         <List sx={{ p: 0, flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', backgroundColor: 'transparent' }}>
           {isMondayLeads ? (
-            MONDAY_USERS.map((user, index) => {
+            mondayUsers.map((user, index) => {
               const isActive = selectedMondayUser === user;
               return (
                 <ListItemButton

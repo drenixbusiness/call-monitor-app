@@ -2,12 +2,13 @@
 
 import { AppBar, Toolbar, Box, Typography, Chip, Button } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { clearRcCredentialsFromStorage } from '@/lib/rcCredentialsStorage';
 
 export default function Header({ status }: { status: 'idle' | 'connected' | 'error' }) {
   const [time, setTime] = useState<string | null>(null);
 
   const handleLogout = () => {
-    localStorage.removeItem('rc_credentials');
+    clearRcCredentialsFromStorage();
     window.location.reload();
   };
 

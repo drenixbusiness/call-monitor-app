@@ -2,7 +2,9 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { RCUser, UserCalls, CallRecord } from '@/types';
-import { WHITELIST_ACCOUNT1 } from '@/lib/whitelist';
+import { getClientDeployAccount } from '@/lib/deployAccount';
+import { getRcCredentialsStorageKey } from '@/lib/rcCredentialsStorage';
+import { WHITELIST_ACCOUNT1, WHITELIST_ACCOUNT2 } from '@/lib/whitelist';
 
 interface GlobalDateFilter {
   preset: 'today' | 'week' | 'month' | 'all' | 'custom';
@@ -141,7 +143,7 @@ export function GlobalProvider({ children }: GlobalProviderProps) {
     setWaitingStats([]);
 
     try {
-      const saved = localStorage.getItem('rc_credentials');
+      const saved = localStorage.getItem(getRcCredentialsStorageKey());
       if (!saved) throw new Error('Not logged in. Please log in first.');
       const creds = JSON.parse(saved);
 
@@ -154,26 +156,40 @@ export function GlobalProvider({ children }: GlobalProviderProps) {
       if (!tokenRes.ok) throw new Error(tokenData.error || 'Auth failed');
       const token = tokenData.access_token;
 
-      setWaitingFetchState(prev => ({ ...prev, progress: 'Fetching users from both accounts...' }));
+      const deploy = getClientDeployAccount();
+      setWaitingFetchState(prev => ({
+        ...prev,
+        progress: deploy ? 'Fetching users…' : 'Fetching users from both accounts...',
+      }));
       await sleep(1200);
 
-      // Account 1 users
       const usersRes1 = await fetch(
         '/api/rc/v1.0/account/~/extension?type=User&status=Enabled&perPage=100&page=1',
         { headers: { 'x-rc-auth': token } }
       );
       const usersData1 = await usersRes1.json();
-      const account1Users = (usersData1.records || []).filter((u: any) => WHITELIST_ACCOUNT1.includes(u.name));
+      const rcRecords = usersData1.records || [];
 
-      // Account 2 users (API paginates & uses flexible name matching - trust its result)
-      const usersRes2 = await fetch('/api/account2/users');
-      const usersData2 = await usersRes2.json();
-      const account2Users = usersData2.users || [];
+      let targetUsers: { id: string; name: string; _account: 'account1' | 'account2' }[] = [];
 
-      const targetUsers = [
-        ...account1Users.map((u: any) => ({ ...u, _account: 'account1' as const })),
-        ...account2Users.map((u: any) => ({ ...u, _account: 'account2' as const })),
-      ];
+      if (deploy === 'account2') {
+        targetUsers = rcRecords
+          .filter((u: any) => WHITELIST_ACCOUNT2.includes(u.name))
+          .map((u: any) => ({ ...u, _account: 'account2' as const }));
+      } else if (deploy === 'account1') {
+        targetUsers = rcRecords
+          .filter((u: any) => WHITELIST_ACCOUNT1.includes(u.name))
+          .map((u: any) => ({ ...u, _account: 'account1' as const }));
+      } else {
+        const account1Users = rcRecords.filter((u: any) => WHITELIST_ACCOUNT1.includes(u.name));
+        const usersRes2 = await fetch('/api/account2/users');
+        const usersData2 = await usersRes2.json();
+        const account2Users = usersData2.users || [];
+        targetUsers = [
+          ...account1Users.map((u: any) => ({ ...u, _account: 'account1' as const })),
+          ...account2Users.map((u: any) => ({ ...u, _account: 'account2' as const })),
+        ];
+      }
 
       // Use full ISO: dateFrom = start of day, dateTo = end of day (RingCentral interprets date-only as midnight, which excludes the end date)
       const dateFrom = fromDate.toISOString().split('T')[0] + 'T00:00:00.000Z';
@@ -197,7 +213,7 @@ export function GlobalProvider({ children }: GlobalProviderProps) {
 
         while (hasMore) {
           let data: any;
-          if (user._account === 'account1') {
+          if (user._account === 'account1' || deploy === 'account2') {
             const url = `/api/rc/v1.0/account/~/extension/${user.id}/call-log?view=Detailed&type=Voice&dateFrom=${dateFrom}&dateTo=${dateTo}&page=${page}&perPage=${CALL_LOG_PER_PAGE}`;
             data = await fetchWithRetry(url, { 'x-rc-auth': token });
           } else {

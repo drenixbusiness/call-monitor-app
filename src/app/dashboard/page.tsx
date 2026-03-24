@@ -12,15 +12,19 @@ import UserLeadsDetail from '@/components/UserLeadsDetail/UserLeadsDetail';
 import { RCUser, UserCalls } from '@/types';
 import { useGlobalContext } from '@/components/GlobalContext';
 import { useRouter } from 'next/navigation';
-import { MONDAY_USERS } from '@/components/MondaySidebar/MondaySidebar';
-import { WHITELIST_ACCOUNT1, WHITELIST_ACCOUNT2 } from '@/lib/whitelist';
+import { getClientDeployAccount } from '@/lib/deployAccount';
+import { getRcCredentialsStorageKey } from '@/lib/rcCredentialsStorage';
+import { WHITELIST_ACCOUNT1, WHITELIST_ACCOUNT2, getMondayUsersForDeploy } from '@/lib/whitelist';
 
 const normalizeExtKey = (id: string | number) => String(id).replace(/\.0$/, '');
 
 export default function Home() {
+  const deploy = getClientDeployAccount();
+  const mondayUsersList = getMondayUsersForDeploy(deploy);
+
   const { users, setUsers, allCalls, setAllCalls, selectedUser, setSelectedUser, globalDateFilter, setGlobalDateFilter } = useGlobalContext();
   const [activeView, setActiveView] = useState<'overview' | 'user' | 'monday-leads'>('overview');
-  const [selectedMondayUser, setSelectedMondayUser] = useState<string | null>('Jessica');
+  const [selectedMondayUser, setSelectedMondayUser] = useState<string | null>(() => mondayUsersList[0] ?? null);
   const [mondayLeadsCache, setMondayLeadsCache] = useState<Record<string, { leads: any[]; statusCounts: Record<string, number>; ts: number }>>({});
   const [hasMounted, setHasMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -49,8 +53,10 @@ export default function Home() {
 
   const loadCallsFromDb = useCallback(async (filteredUsers: RCUser[]) => {
     const ids = filteredUsers.map(u => u.id).join(',');
+    const accountQ =
+      deploy === 'account1' ? '&account=account1' : deploy === 'account2' ? '&account=account2' : '';
     try {
-      const res = await fetch(`/api/calls?range=all&extensionIds=${ids}`);
+      const res = await fetch(`/api/calls?range=all&extensionIds=${ids}${accountQ}`);
       const data = await res.json();
       const newMap: UserCalls = {};
       filteredUsers.forEach(u => {
@@ -71,7 +77,7 @@ export default function Home() {
     } catch (e) {
       console.error('Failed to load calls from DB', e);
     }
-  }, [setAllCalls]);
+  }, [setAllCalls, deploy]);
 
   const handleLoad = useCallback(async (savedCreds?: { clientId: string; clientSecret: string; jwt: string }) => {
     const creds = savedCreds || credentials;
@@ -106,19 +112,28 @@ export default function Home() {
 
       const filteredAccount1 = account1Users.filter(u => WHITELIST_ACCOUNT1.includes(u.name));
 
-      const acc2Res = await fetch('/api/account2/users');
-      let filteredAccount2: RCUser[] = [];
-      if (acc2Res.ok) {
-        const acc2Data = await acc2Res.json();
-        filteredAccount2 = (acc2Data.users || []).filter((u: RCUser) => WHITELIST_ACCOUNT2.includes(u.name));
+      let allFilteredUsers: RCUser[] = [];
+      if (deploy === 'account2') {
+        allFilteredUsers = account1Users.filter(u => WHITELIST_ACCOUNT2.includes(u.name));
+      } else if (deploy === 'account1') {
+        allFilteredUsers = filteredAccount1;
+      } else {
+        const acc2Res = await fetch('/api/account2/users');
+        let filteredAccount2: RCUser[] = [];
+        if (acc2Res.ok) {
+          const acc2Data = await acc2Res.json();
+          filteredAccount2 = (acc2Data.users || []).filter((u: RCUser) => WHITELIST_ACCOUNT2.includes(u.name));
+        }
+        allFilteredUsers = [...filteredAccount1, ...filteredAccount2];
       }
 
-      const allFilteredUsers = [...filteredAccount1, ...filteredAccount2];
       setUsers(allFilteredUsers);
       if (allFilteredUsers.length > 0) setSelectedUser(allFilteredUsers[0]);
 
       const ids = allFilteredUsers.map(u => u.id).join(',');
-      const cachedRes = await fetch(`/api/calls?range=all&extensionIds=${ids}`);
+      const accountQ =
+        deploy === 'account1' ? '&account=account1' : deploy === 'account2' ? '&account=account2' : '';
+      const cachedRes = await fetch(`/api/calls?range=all&extensionIds=${ids}${accountQ}`);
       const cachedData = await cachedRes.json();
       const hasCachedData = (cachedData.records || []).length > 0;
 
@@ -142,7 +157,10 @@ export default function Home() {
         jwt: creds.jwt
       }));
 
-      const extensionIds = filteredAccount1.map(u => u.id);
+      const extensionIds =
+        deploy === 'account1' || deploy === 'account2'
+          ? allFilteredUsers.map(u => u.id)
+          : filteredAccount1.map(u => u.id);
       const syncRes = await fetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -151,8 +169,8 @@ export default function Home() {
 
       if (syncRes.ok) {
         await loadCallsFromDb(allFilteredUsers);
-        setSyncPhase('done');
       }
+      setSyncPhase('done');
 
       setIsCheckingAuth(false);
 
@@ -162,22 +180,32 @@ export default function Home() {
       setStatusOk(false);
       setIsLoading(false);
       if (err.message?.includes('Authentication failed') || err.message?.includes('Unparseable')) {
-        localStorage.removeItem('rc_credentials');
+        localStorage.removeItem(getRcCredentialsStorageKey());
       }
       setShowConfig(true);
     }
-  }, [credentials, loadCallsFromDb, setUsers, setSelectedUser, setAllCalls]);
+  }, [credentials, deploy, loadCallsFromDb, setUsers, setSelectedUser, setAllCalls]);
+
+  useEffect(() => {
+    if (mondayUsersList.length === 0) {
+      setSelectedMondayUser(null);
+      return;
+    }
+    if (selectedMondayUser == null || !mondayUsersList.includes(selectedMondayUser)) {
+      setSelectedMondayUser(mondayUsersList[0]);
+    }
+  }, [mondayUsersList, selectedMondayUser]);
 
   useEffect(() => {
     setHasMounted(true);
-    const saved = localStorage.getItem('rc_credentials');
+    const saved = localStorage.getItem(getRcCredentialsStorageKey());
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         setCredentials(prev => ({ ...prev, ...parsed }));
         handleLoad(parsed);
       } catch {
-        localStorage.removeItem('rc_credentials');
+        localStorage.removeItem(getRcCredentialsStorageKey());
         setShowConfig(true);
         setIsCheckingAuth(false);
       }
@@ -230,6 +258,7 @@ export default function Home() {
             isLoading={isLoading}
             loadingMsg={loadingMsg}
             error={error}
+            deployHint={deploy ? (deploy === 'account1' ? 'This deployment: BP — use RingCentral credentials for company BP only.' : 'This deployment: JDM — use RingCentral credentials for company JDM only.') : undefined}
           />
         ) : (
           <>
@@ -243,6 +272,7 @@ export default function Home() {
               onSelectMondayLeads={() => setActiveView('monday-leads')}
               selectedMondayUser={selectedMondayUser}
               onSelectMondayUser={setSelectedMondayUser}
+              mondayUsers={mondayUsersList}
             />
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', pb: 6 }}>
               {activeView !== 'monday-leads' && <StatsRow users={users} allCalls={allCalls} />}
@@ -294,7 +324,7 @@ export default function Home() {
               {activeView === 'monday-leads' && selectedMondayUser && (
                 <UserLeadsDetail
                   userName={selectedMondayUser}
-                  userIndex={MONDAY_USERS.indexOf(selectedMondayUser as (typeof MONDAY_USERS)[number])}
+                  userIndex={Math.max(0, mondayUsersList.indexOf(selectedMondayUser))}
                   cachedData={mondayLeadsCache[selectedMondayUser]}
                   onCacheUpdate={handleMondayLeadsCacheUpdate}
                 />

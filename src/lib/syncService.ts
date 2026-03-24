@@ -186,7 +186,7 @@ async function processQueue() {
             INSERT INTO calls 
             (id, call_id, from_number, to_number, direction, result, user_extension, start_time, duration, recording_url, account)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            ON CONFLICT (call_id) DO NOTHING
+            ON CONFLICT (id) DO NOTHING
           `).run([
             `${call.id}-${call.sessionId}`,
             call.id,

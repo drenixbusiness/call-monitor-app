@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getServerDeployAccount } from '@/lib/deployAccount';
+import { getMondayUsersForDeploy } from '@/lib/whitelist';
 
 const MONDAY_API = 'https://api.monday.com/v2';
 
@@ -11,6 +13,12 @@ const USER_BOARD_MAP: Record<string, string[]> = {
 };
 
 export const MONDAY_USERS = ['Alex Chester', 'Fred', 'Ethan', 'Winston', 'Jessica'] as const;
+
+function mondayUserKeysForDeploy(): string[] {
+  const deploy = getServerDeployAccount();
+  if (deploy) return [...getMondayUsersForDeploy(deploy)] as string[];
+  return Object.keys(USER_BOARD_MAP);
+}
 
 /** Map board name -> user who owns that board (for Owner_lead fallback when empty) */
 const BOARD_TO_USER: Record<string, string> = {};
@@ -185,12 +193,19 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Invalid user. Use: Alex Chester, Fred, Ethan, Winston, Jessica' }, { status: 400 });
     }
 
+    const deploy = getServerDeployAccount();
+    const allowedMonday = getMondayUsersForDeploy(deploy) as readonly string[];
+    if (deploy && !allowedMonday.includes(userName)) {
+      return NextResponse.json({ error: 'This user is not available on this deployment' }, { status: 403 });
+    }
+
     const dateFromParam = searchParams.get('dateFrom');
     const dateToParam = searchParams.get('dateTo');
     const useCustomRange = dateFromParam && dateToParam;
 
     const boardNamesForDisplay = USER_BOARD_MAP[userName];
-    const allBoardNames = Object.values(USER_BOARD_MAP).flat();
+    const mondayKeys = mondayUserKeysForDeploy();
+    const allBoardNames = mondayKeys.flatMap((k) => USER_BOARD_MAP[k] || []);
     const { from: monthFrom, to: monthTo } = getThisMonthRange();
     const filterFrom = useCustomRange ? new Date(dateFromParam!) : monthFrom;
     const filterTo = useCustomRange ? new Date(dateToParam!) : monthTo;

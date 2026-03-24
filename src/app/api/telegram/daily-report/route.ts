@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { getShiftWindowISO, getReportDayRangeISO, getShiftHours, getReportCallsRangeTashkentISO } from '@/utils/leadShift';
 
 export const maxDuration = 60;
-import { WHITELIST_ACCOUNT1 } from '@/lib/whitelist';
+import { getServerDeployAccount } from '@/lib/deployAccount';
+import { WHITELIST_ACCOUNT1, WHITELIST_ACCOUNT2 } from '@/lib/whitelist';
 
 type UserStats = {
   name: string;
@@ -128,10 +129,11 @@ async function getAccount1Token(
   return { token: null, error: String(err).slice(0, 200) };
 }
 
-async function fetchAccount1Users(clientId: string, clientSecret: string, jwt: string): Promise<UserWithExt[]> {
-  const { token } = await getAccount1Token(clientId, clientSecret, jwt);
-  if (!token) return [];
-
+/** Paginate extensions with a token; filter HR recruiters by whitelist for this RC tenant. */
+async function fetchUsersFromToken(
+  token: string,
+  mode: 'account1' | 'account2' | 'legacy_rc1'
+): Promise<UserWithExt[]> {
   const users: UserWithExt[] = [];
   let url: string | null = `${RC_BASE}/v1.0/account/~/extension?type=User&status=Enabled&perPage=100&page=1`;
   while (url) {
@@ -140,9 +142,13 @@ async function fetchAccount1Users(clientId: string, clientSecret: string, jwt: s
     const data: { records?: any[]; navigation?: { nextPage?: { uri?: string } } } = await res.json();
     const records = data.records || [];
     for (const u of records) {
-      if (WHITELIST_ACCOUNT1.includes(u.name) && HR_RC_NAMES.has(u.name)) {
-        users.push({ id: String(u.id), name: u.name });
+      if (!HR_RC_NAMES.has(u.name)) continue;
+      if (mode === 'account1' || mode === 'legacy_rc1') {
+        if (!WHITELIST_ACCOUNT1.includes(u.name)) continue;
+      } else {
+        if (!WHITELIST_ACCOUNT2.includes(u.name)) continue;
       }
+      users.push({ id: String(u.id), name: u.name });
     }
     url = data.navigation?.nextPage?.uri || null;
   }
@@ -179,7 +185,7 @@ async function fetchAccount2Users(): Promise<UserWithExt[]> {
     const data: { records?: any[]; navigation?: { nextPage?: { uri?: string } } } = await res.json();
     const records = data.records || [];
     for (const u of records) {
-      if (HR_RC_NAMES.has(u.name)) {
+      if (HR_RC_NAMES.has(u.name) && WHITELIST_ACCOUNT2.includes(u.name)) {
         users.push({ id: String(u.id), name: u.name });
       }
     }
@@ -242,19 +248,39 @@ export async function GET(request: Request) {
   const rc1ClientId = process.env.RC_CLIENT_ID || process.env.NEXT_PUBLIC_RC_CLIENT_ID;
   const rc1ClientSecret = process.env.RC_CLIENT_SECRET || process.env.NEXT_PUBLIC_RC_CLIENT_SECRET;
   const rc1Jwt = process.env.RC_JWT || process.env.NEXT_PUBLIC_RC_JWT;
+
+  const rc1Result =
+    rc1ClientId && rc1ClientSecret && rc1Jwt ? await getAccount1Token(rc1ClientId, rc1ClientSecret, rc1Jwt) : null;
+  const rc1Token = rc1Result?.token ?? null;
+  const rc1TokenError = rc1Result?.error;
+
+  const deploy = getServerDeployAccount();
   const users: UserWithExt[] = [];
   let acc1Count = 0;
   let acc2Count = 0;
 
-  if (rc1ClientId && rc1ClientSecret && rc1Jwt) {
-    const acc1Users = await fetchAccount1Users(rc1ClientId, rc1ClientSecret, rc1Jwt);
-    acc1Count = acc1Users.length;
-    users.push(...acc1Users);
+  if (deploy === 'account1') {
+    if (rc1Token) {
+      const u = await fetchUsersFromToken(rc1Token, 'account1');
+      acc1Count = u.length;
+      users.push(...u);
+    }
+  } else if (deploy === 'account2') {
+    if (rc1Token) {
+      const u = await fetchUsersFromToken(rc1Token, 'account2');
+      acc2Count = u.length;
+      users.push(...u);
+    }
+  } else {
+    if (rc1Token) {
+      const u = await fetchUsersFromToken(rc1Token, 'legacy_rc1');
+      acc1Count = u.length;
+      users.push(...u);
+    }
+    const acc2Users = await fetchAccount2Users();
+    acc2Count = acc2Users.length;
+    users.push(...acc2Users);
   }
-
-  const acc2Users = await fetchAccount2Users();
-  acc2Count = acc2Users.length;
-  users.push(...acc2Users);
 
   // Fetch calls directly from RingCentral (no DB dependency) - same as dashboard's Waiting view
   // Deduplicate by sessionId (RC returns multiple legs per call) - match dashboard behavior
@@ -301,10 +327,6 @@ export async function GET(request: Request) {
     callRecordsByExt[extId] = sessionMap;
   };
 
-  const rc1Result =
-    rc1ClientId && rc1ClientSecret && rc1Jwt ? await getAccount1Token(rc1ClientId, rc1ClientSecret, rc1Jwt) : null;
-  const rc1Token = rc1Result?.token ?? null;
-  const rc1TokenError = rc1Result?.error;
   let rc2Token: string | null = null;
   if (process.env.RC2_CLIENT_ID && process.env.RC2_CLIENT_SECRET && process.env.RC2_JWT) {
     const enc = Buffer.from(`${process.env.RC2_CLIENT_ID}:${process.env.RC2_CLIENT_SECRET}`).toString('base64');
@@ -322,12 +344,15 @@ export async function GET(request: Request) {
 
   const acc1UserList = users.slice(0, acc1Count);
   const acc2UserList = users.slice(acc1Count);
+  /** JDM single-deploy: all users live under RC_* token (no RC2_*). */
+  const tokenForAcc2Calls = deploy === 'account2' ? rc1Token : rc2Token;
+
   await Promise.all(
     acc1UserList.map((u) => (rc1Token ? fetchCallsForUser(u.id, rc1Token) : Promise.resolve()))
   );
   await sleep(RC_DELAY_MS);
   await Promise.all(
-    acc2UserList.map((u) => (rc2Token ? fetchCallsForUser(u.id, rc2Token) : Promise.resolve()))
+    acc2UserList.map((u) => (tokenForAcc2Calls ? fetchCallsForUser(u.id, tokenForAcc2Calls) : Promise.resolve()))
   );
 
   const callRecords: any[] = [];
@@ -362,14 +387,20 @@ export async function GET(request: Request) {
     s.talkMinutes += Math.floor((c.duration || 0) / 60);
   }
 
-  /** All 5 HR recruiters: RC display name -> Monday API user param. Include all even if RC missing. */
-  const HR_RECRUITERS: { rcName: string; mondayUser: string }[] = [
+  /** RC display name -> Monday API user param. Filtered by deploy (BP vs JDM). */
+  const HR_RECRUITERS_ALL: { rcName: string; mondayUser: string }[] = [
     { rcName: 'Alex Chester', mondayUser: 'Alex Chester' },
     { rcName: 'Fred Royce', mondayUser: 'Fred' },
     { rcName: 'Ethan Parker', mondayUser: 'Ethan' },
     { rcName: 'Winston Smith', mondayUser: 'Winston' },
     { rcName: 'Jessica Miller', mondayUser: 'Jessica' },
   ];
+  const HR_RECRUITERS =
+    deploy === 'account1'
+      ? HR_RECRUITERS_ALL.filter((r) => WHITELIST_ACCOUNT1.includes(r.rcName))
+      : deploy === 'account2'
+        ? HR_RECRUITERS_ALL.filter((r) => WHITELIST_ACCOUNT2.includes(r.rcName))
+        : HR_RECRUITERS_ALL;
 
   const leadsDebug: Record<string, { count: number; ok: boolean; status?: number; error?: string }> = {};
   const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
@@ -473,7 +504,7 @@ export async function GET(request: Request) {
     msg += `📋 *Daily Outcome*\n${aiReport.dailyOutcome}\n\n`;
   }
 
-  msg += `📈 *TOTAL (5 users)*\n`;
+  msg += `📈 *TOTAL (${statsList.length} users)*\n`;
   msg += `   Talk: ${totalTalk} min | Leads: ${totalLeads} total (${totalOnTime} on-time, ${totalLate} late) | Calls: ${totalConnected} connected, ${totalMissed} missed | Rejected: ${totalRejected}`;
 
   const TELEGRAM_MAX_LENGTH = 4096;

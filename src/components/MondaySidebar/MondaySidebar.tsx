@@ -2,8 +2,11 @@
 
 import { Box, Drawer, Typography, List, ListItemButton, Avatar } from '@mui/material';
 import { getColor } from '@/utils/helpers';
+import { getClientDeployAccount } from '@/lib/deployAccount';
+import { getMondayUsersForDeploy, MONDAY_USERS_ALL } from '@/lib/whitelist';
 
-export const MONDAY_USERS = ['Alex Chester', 'Fred', 'Ethan', 'Winston', 'Jessica'] as const;
+/** Legacy export: all users (dual-mode). Prefer `getMondayUsersForDeploy(getClientDeployAccount())` per deploy. */
+export const MONDAY_USERS = MONDAY_USERS_ALL;
 
 interface MondaySidebarProps {
   selectedUser: string | null;
@@ -11,6 +14,8 @@ interface MondaySidebarProps {
 }
 
 export default function MondaySidebar({ selectedUser, onSelectUser }: MondaySidebarProps) {
+  const mondayUsers = [...getMondayUsersForDeploy(getClientDeployAccount())];
+
   return (
     <Drawer
       variant="permanent"
@@ -46,7 +51,7 @@ export default function MondaySidebar({ selectedUser, onSelectUser }: MondaySide
       </Box>
 
       <List sx={{ p: 0, flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
-        {MONDAY_USERS.map((user, index) => {
+        {mondayUsers.map((user, index) => {
           const isActive = selectedUser === user;
           return (
             <ListItemButton
