@@ -19,6 +19,7 @@ import { format, addDays, startOfDay, eachDayOfInterval } from 'date-fns';
 import MiniCharts from '../MiniCharts/MiniCharts';
 import CallTable from '../CallTable/CallTable';
 import { useGlobalContext } from '@/components/GlobalContext';
+import { sortCallsByStartTimeDesc } from '@/utils/callFilters';
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip, Legend);
 ChartJS.defaults.font.family = '"Google Sans", "Helvetica", "Arial", sans-serif';
@@ -75,7 +76,7 @@ export default function UserDetail({
       }
     }
 
-    return result;
+    return sortCallsByStartTimeDesc(result);
   }, [calls, activeFilter, timeRange, customDateFrom, customDateTo]);
 
   const maxDuration = useMemo(() => {

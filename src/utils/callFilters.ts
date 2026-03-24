@@ -7,6 +7,18 @@
 import type { CallRecord } from '@/types';
 import { startOfMonth, startOfWeek } from 'date-fns';
 
+/** Newest first (fixes TEXT `start_time` DB ordering and merged multi-user fetch order). */
+export function sortCallsByStartTimeDesc<T extends { startTime: string }>(calls: T[]): T[] {
+  return [...calls].sort((a, b) => {
+    const ta = Date.parse(a.startTime);
+    const tb = Date.parse(b.startTime);
+    if (Number.isNaN(ta) && Number.isNaN(tb)) return 0;
+    if (Number.isNaN(ta)) return 1;
+    if (Number.isNaN(tb)) return -1;
+    return tb - ta;
+  });
+}
+
 /** Minimum ring duration (seconds) to include a call in any dashboard view or stat. */
 export const MIN_CALL_DURATION_SECONDS = 30;
 

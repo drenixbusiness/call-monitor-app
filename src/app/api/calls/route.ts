@@ -72,7 +72,7 @@ export async function GET(request: Request) {
       const query = `
         SELECT * FROM calls 
         WHERE ${conditions.join(' AND ')}${accountSql}
-        ORDER BY start_time DESC
+        ORDER BY (start_time::timestamptz) DESC NULLS LAST
       `;
       const result = await db.prepare(query).all(params as [string[], ...string[]]);
       rows = result;
@@ -80,7 +80,7 @@ export async function GET(request: Request) {
       const query = `
         SELECT * FROM calls 
         WHERE REPLACE(user_extension, '.0', '') = ANY($1::text[])${accountSql}
-        ORDER BY start_time DESC
+        ORDER BY (start_time::timestamptz) DESC NULLS LAST
       `;
       const result = await db.prepare(query).all([normalizedIds]);
       rows = result;

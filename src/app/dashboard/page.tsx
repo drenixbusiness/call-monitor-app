@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation';
 import { getClientDeployAccount } from '@/lib/deployAccount';
 import { getRcCredentialsStorageKey, readRcCredentialsFromStorage } from '@/lib/rcCredentialsStorage';
 import { WHITELIST_ACCOUNT1, WHITELIST_ACCOUNT2, getMondayUsersForDeploy } from '@/lib/whitelist';
+import { sortCallsByStartTimeDesc } from '@/utils/callFilters';
 
 const normalizeExtKey = (id: string | number) => String(id).replace(/\.0$/, '');
 
@@ -72,6 +73,9 @@ export default function Home() {
         if ((c.result === 'Accepted' || c.result === 'Call connected') && c.duration >= 20) {
           newMap[key].push(c);
         }
+      });
+      Object.keys(newMap).forEach((key) => {
+        newMap[key] = sortCallsByStartTimeDesc(newMap[key]);
       });
       setAllCalls(newMap);
     } catch (e) {
