@@ -10,6 +10,22 @@ export function getRcCredentialsStorageKey(): string {
   return LEGACY_KEY;
 }
 
+/** Read saved JSON; migrates legacy `rc_credentials` → deploy-specific key once. */
+export function readRcCredentialsFromStorage(): string | null {
+  if (typeof window === 'undefined') return null;
+  const key = getRcCredentialsStorageKey();
+  let saved = localStorage.getItem(key);
+  if (!saved && key !== LEGACY_KEY) {
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (legacy) {
+      localStorage.setItem(key, legacy);
+      localStorage.removeItem(LEGACY_KEY);
+      saved = legacy;
+    }
+  }
+  return saved;
+}
+
 export function clearRcCredentialsFromStorage(): void {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(LEGACY_KEY);

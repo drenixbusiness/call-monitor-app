@@ -13,7 +13,7 @@ import { RCUser, UserCalls } from '@/types';
 import { useGlobalContext } from '@/components/GlobalContext';
 import { useRouter } from 'next/navigation';
 import { getClientDeployAccount } from '@/lib/deployAccount';
-import { getRcCredentialsStorageKey } from '@/lib/rcCredentialsStorage';
+import { getRcCredentialsStorageKey, readRcCredentialsFromStorage } from '@/lib/rcCredentialsStorage';
 import { WHITELIST_ACCOUNT1, WHITELIST_ACCOUNT2, getMondayUsersForDeploy } from '@/lib/whitelist';
 
 const normalizeExtKey = (id: string | number) => String(id).replace(/\.0$/, '');
@@ -151,11 +151,14 @@ export default function Home() {
         setSyncPhase('syncing');
       }
 
-      localStorage.setItem('rc_credentials', JSON.stringify({
-        clientId: creds.clientId,
-        clientSecret: creds.clientSecret,
-        jwt: creds.jwt
-      }));
+      localStorage.setItem(
+        getRcCredentialsStorageKey(),
+        JSON.stringify({
+          clientId: creds.clientId,
+          clientSecret: creds.clientSecret,
+          jwt: creds.jwt,
+        })
+      );
 
       const extensionIds =
         deploy === 'account1' || deploy === 'account2'
@@ -198,7 +201,7 @@ export default function Home() {
 
   useEffect(() => {
     setHasMounted(true);
-    const saved = localStorage.getItem(getRcCredentialsStorageKey());
+    const saved = readRcCredentialsFromStorage();
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
