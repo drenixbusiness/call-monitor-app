@@ -3,6 +3,7 @@
 import { AppBar, Toolbar, Box, Typography, Chip, Button } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { clearRcCredentialsFromStorage } from '@/lib/rcCredentialsStorage';
+import { getClientDeployAccount } from '@/lib/deployAccount';
 
 export default function Header({ status }: { status: 'idle' | 'connected' | 'error' }) {
   const [time, setTime] = useState<string | null>(null);
@@ -26,6 +27,10 @@ export default function Header({ status }: { status: 'idle' | 'connected' | 'err
     const interval = setInterval(() => setTime(fmt()), 60000);
     return () => clearInterval(interval);
   }, []);
+
+  const deploy = getClientDeployAccount();
+  const monitoringSuffix =
+    deploy === 'account1' ? 'Monitoring BP' : deploy === 'account2' ? 'Monitoring JDM' : 'Monitoring';
 
   const getStatusColor = () => {
     switch (status) {
@@ -68,8 +73,30 @@ export default function Header({ status }: { status: 'idle' | 'connected' | 'err
             }} />
           </Box>
 
-          <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.3rem', letterSpacing: '-0.5px' }}>
-            HR<Box component="span" sx={{ color: 'var(--accent)' }}>Monitoring</Box>
+          <Typography
+            component="div"
+            variant="h6"
+            sx={{
+              fontWeight: 700,
+              fontSize: '1.3rem',
+              letterSpacing: '-0.5px',
+              display: 'flex',
+              alignItems: 'baseline',
+              flexWrap: 'wrap',
+              gap: 0.75,
+            }}
+          >
+            {process.env.NEXT_PUBLIC_APP_NAME ? (
+              <Box component="span" sx={{ color: 'var(--text)' }}>
+                {process.env.NEXT_PUBLIC_APP_NAME}
+              </Box>
+            ) : null}
+            <Box component="span" sx={{ color: 'var(--text)' }}>
+              HR{' '}
+              <Box component="span" sx={{ color: 'var(--accent)' }}>
+                {monitoringSuffix}
+              </Box>
+            </Box>
           </Typography>
 
           <Box sx={{ height: 20, width: '1px', backgroundColor: 'var(--border2)' }} />

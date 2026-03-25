@@ -10,14 +10,32 @@ import {
   CategoryScale,
   LinearScale,
   BarElement,
+  LineElement,
+  PointElement,
+  Filler,
 } from 'chart.js';
 import { RCUser, UserCalls, CallRecord } from '@/types';
+import { format, addDays, startOfDay, eachDayOfInterval } from 'date-fns';
 import { fmtDuration, getDisplayName, getColor } from '@/utils/helpers';
 import { useMemo, useState } from 'react';
 import { useGlobalContext } from '@/components/GlobalContext';
 import WaitingDashboard from './WaitingDashboard';
+import { Line } from 'react-chartjs-2';
+import { sortCallsByStartTimeDesc } from '@/utils/callFilters';
 
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
+const normalizeExtKey = (id: string | number) => String(id).replace(/\.0$/, '');
+
+ChartJS.register(
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Filler
+);
 ChartJS.defaults.font.family = '"Google Sans", "Helvetica", "Arial", sans-serif';
 
 type TimeRange = 'Daily' | 'Weekly' | 'Monthly' | 'All' | 'Custom';
@@ -39,6 +57,77 @@ export default function DashboardOverview({
           : globalDateFilter.preset === 'custom' ? 'Custom'
             : 'All';
 
+  /** All whitelisted users' calls merged (same keys as dashboard `allCalls`). */
+  const allCallsFlat = useMemo(() => {
+    const list: CallRecord[] = [];
+    users.forEach((u) => {
+      const key = normalizeExtKey(u.id);
+      list.push(...(allCalls[key] || []));
+    });
+    return sortCallsByStartTimeDesc(list);
+  }, [users, allCalls]);
+
+  const [missedChartFilter, setMissedChartFilter] = useState<'today' | 'week' | 'month' | 'custom'>('week');
+  const missedCallsForChart = useMemo(() => {
+    const missed = allCallsFlat.filter((c) => c.result === 'Missed');
+    const now = new Date();
+    if (missedChartFilter === 'today') {
+      const todayStart = startOfDay(now);
+      return missed.filter((c) => new Date(c.startTime) >= todayStart);
+    }
+    if (missedChartFilter === 'week') {
+      const weekAgo = addDays(now, -7);
+      return missed.filter((c) => new Date(c.startTime) >= weekAgo);
+    }
+    if (missedChartFilter === 'month') {
+      const monthAgo = addDays(now, -30);
+      return missed.filter((c) => new Date(c.startTime) >= monthAgo);
+    }
+    const asc = [...allCallsFlat].sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
+    const last500 = asc.slice(-500);
+    return last500.filter((c) => c.result === 'Missed');
+  }, [allCallsFlat, missedChartFilter]);
+
+  const missedLineData = useMemo(() => {
+    const now = new Date();
+    let days: Date[] = [];
+    if (missedChartFilter === 'today') {
+      days = Array.from({ length: 24 }, (_, i) => {
+        const d = new Date(now);
+        d.setHours(i, 0, 0, 0);
+        return d;
+      });
+    } else if (missedChartFilter === 'week') {
+      days = eachDayOfInterval({ start: addDays(now, -7), end: now });
+    } else if (missedChartFilter === 'month') {
+      days = eachDayOfInterval({ start: addDays(now, -30), end: now });
+    } else {
+      const asc = [...allCallsFlat].sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
+      const last500 = asc.slice(-500);
+      if (last500.length === 0) return { labels: [] as string[], data: [] as number[] };
+      const minDate = startOfDay(new Date(last500[0].startTime));
+      const maxDate = new Date(last500[last500.length - 1].startTime);
+      days = eachDayOfInterval({ start: minDate, end: maxDate });
+    }
+    const buckets: { label: string; count: number }[] = days.map((d) => ({
+      label: missedChartFilter === 'today' ? `${d.getHours()}:00` : format(d, 'MMM d'),
+      count: 0,
+    }));
+    const keyToIndex: Record<string, number> = {};
+    days.forEach((d, i) => {
+      keyToIndex[missedChartFilter === 'today' ? String(d.getHours()) : format(d, 'yyyy-MM-dd')] = i;
+    });
+    missedCallsForChart.forEach((c) => {
+      const d = new Date(c.startTime);
+      const key = missedChartFilter === 'today' ? String(d.getHours()) : format(d, 'yyyy-MM-dd');
+      if (keyToIndex[key] !== undefined) buckets[keyToIndex[key]].count += 1;
+    });
+    return {
+      labels: buckets.map((b) => b.label),
+      data: buckets.map((b) => b.count),
+    };
+  }, [missedCallsForChart, missedChartFilter, allCallsFlat]);
+
   const filteredByUser = useMemo(() => {
     const result: Record<number, CallRecord[]> = {};
     if (timeRange === 'All') {
@@ -47,6 +136,7 @@ export default function DashboardOverview({
       });
       return result;
     }
+
     const now = new Date();
     const cutoff = new Date(now);
     if (timeRange === 'Daily') cutoff.setDate(now.getDate() - 1);
@@ -237,6 +327,80 @@ export default function DashboardOverview({
                 Inbound / outbound / missed by user
               </Typography>
               <Bar data={directionBarData} options={directionBarOptions} />
+            </Box>
+
+
+            <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+              <Box sx={{ width: '100%', maxWidth: '100%', backgroundColor: 'var(--surface)', borderRadius: 3, border: '1px solid var(--border)', p: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+                  <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text2)' }}>
+                    Missed calls over time (all users)
+                  </Typography>
+                  <ToggleButtonGroup
+                    value={missedChartFilter}
+                    exclusive
+                    onChange={(_, v) => v && setMissedChartFilter(v)}
+                    size="small"
+                    sx={{
+                      backgroundColor: 'var(--surface2)',
+                      '& .MuiToggleButton-root': {
+                        color: 'var(--text2)',
+                        border: '1px solid var(--border2)',
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        fontSize: '0.85rem',
+                        px: 2,
+                        py: 0.5,
+                        '&.Mui-selected': { color: '#fff', backgroundColor: 'var(--surface3)' },
+                      },
+                    }}
+                  >
+                    <ToggleButton value="today">Today</ToggleButton>
+                    <ToggleButton value="week">Week</ToggleButton>
+                    <ToggleButton value="month">Month</ToggleButton>
+                    <ToggleButton value="custom">Custom (last 500)</ToggleButton>
+                  </ToggleButtonGroup>
+                </Box>
+                {missedLineData.labels.length > 0 ? (
+                  <Box sx={{ height: 220, width: '100%' }}>
+                    <Line
+                      data={{
+                        labels: missedLineData.labels,
+                        datasets: [{
+                          label: 'Missed',
+                          data: missedLineData.data,
+                          borderColor: '#ff4566',
+                          backgroundColor: 'rgba(255, 69, 102, 0.15)',
+                          fill: true,
+                          tension: 0.3,
+                        }],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { labels: { color: '#ffffff', font: { size: 14 } } },
+                          tooltip: { bodyColor: '#ffffff', titleColor: '#ffffff', bodyFont: { size: 14 }, titleFont: { size: 15 } },
+                        },
+                        scales: {
+                          x: {
+                            ticks: { color: '#ffffff', font: { size: 13 }, maxRotation: 45 },
+                            grid: { color: 'var(--border2)' },
+                          },
+                          y: {
+                            ticks: { color: '#ffffff', font: { size: 13 } },
+                            grid: { color: 'var(--border2)' },
+                          },
+                        },
+                      }}
+                    />
+                  </Box>
+                ) : (
+                  <Box sx={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', fontSize: '0.95rem' }}>
+                    No missed calls in selected range
+                  </Box>
+                )}
+              </Box>
             </Box>
 
           </Box>
