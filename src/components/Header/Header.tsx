@@ -30,7 +30,7 @@ export default function Header({ status }: { status: 'idle' | 'connected' | 'err
 
   const deploy = getClientDeployAccount();
   const monitoringSuffix =
-    deploy === 'account1' ? 'Monitoring BP' : deploy === 'account2' ? 'Monitoring JDM' : 'Monitoring';
+    deploy === 'account1' ? 'Monitoring BP' : deploy === 'account2' ? 'Monitoring JM' : 'Monitoring';
 
   const getStatusColor = () => {
     switch (status) {
