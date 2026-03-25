@@ -1,6 +1,16 @@
 'use client';
 
-import { Box, Typography, ToggleButtonGroup, ToggleButton } from '@mui/material';
+import {
+  Box,
+  Typography,
+  ToggleButtonGroup,
+  ToggleButton,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Chip,
+} from '@mui/material';
 import { Pie, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -17,13 +27,18 @@ import {
 import { RCUser, UserCalls, CallRecord } from '@/types';
 import { format, addDays, startOfDay, eachDayOfInterval } from 'date-fns';
 import { fmtDuration, getDisplayName, getColor } from '@/utils/helpers';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useGlobalContext } from '@/components/GlobalContext';
 import WaitingDashboard from './WaitingDashboard';
 import { Line } from 'react-chartjs-2';
 import { sortCallsByStartTimeDesc } from '@/utils/callFilters';
 
 const normalizeExtKey = (id: string | number) => String(id).replace(/\.0$/, '');
+
+function callsForUser(u: RCUser, allCalls: UserCalls): CallRecord[] {
+  const key = normalizeExtKey(u.id);
+  return allCalls[key] ?? allCalls[u.id] ?? [];
+}
 
 ChartJS.register(
   ArcElement,
@@ -61,8 +76,7 @@ export default function DashboardOverview({
   const allCallsFlat = useMemo(() => {
     const list: CallRecord[] = [];
     users.forEach((u) => {
-      const key = normalizeExtKey(u.id);
-      list.push(...(allCalls[key] || []));
+      list.push(...callsForUser(u, allCalls));
     });
     return sortCallsByStartTimeDesc(list);
   }, [users, allCalls]);
@@ -132,7 +146,7 @@ export default function DashboardOverview({
     const result: Record<number, CallRecord[]> = {};
     if (timeRange === 'All') {
       users.forEach((u) => {
-        result[u.id] = allCalls[u.id] || [];
+        result[u.id] = callsForUser(u, allCalls);
       });
       return result;
     }
@@ -149,7 +163,7 @@ export default function DashboardOverview({
         const toEnd = new Date(to);
         toEnd.setHours(23, 59, 59, 999);
         users.forEach((u) => {
-          const calls = allCalls[u.id] || [];
+          const calls = callsForUser(u, allCalls);
           result[u.id] = calls.filter((c) => {
             const d = new Date(c.startTime);
             return d >= from && d <= toEnd;
@@ -160,7 +174,7 @@ export default function DashboardOverview({
     }
 
     users.forEach((u) => {
-      const calls = allCalls[u.id] || [];
+      const calls = callsForUser(u, allCalls);
       result[u.id] = calls.filter((c) => new Date(c.startTime) >= cutoff);
     });
     return result;
@@ -180,6 +194,25 @@ export default function DashboardOverview({
       return { id: u.id, name: getDisplayName(u, users), callsCount: calls.length, duration, outbound, inbound, missed, connected };
     });
   }, [users, filteredByUser]);
+
+  const [compareUserId, setCompareUserId] = useState<string>('');
+
+  useEffect(() => {
+    if (users.length === 0) return;
+    setCompareUserId((prev) =>
+      prev && users.some((u) => String(u.id) === prev) ? prev : String(users[0].id)
+    );
+  }, [users]);
+
+  const compareStats = useMemo(() => {
+    if (!compareUserId) return null;
+    return perUserStats.find((s) => String(s.id) === compareUserId) ?? null;
+  }, [perUserStats, compareUserId]);
+
+  const compareUserIndex = useMemo(
+    () => users.findIndex((u) => String(u.id) === compareUserId),
+    [users, compareUserId]
+  );
 
   const totalCalls = perUserStats.reduce((acc, u) => acc + u.callsCount, 0) || 1;
 
@@ -301,6 +334,110 @@ export default function DashboardOverview({
                 {fmtDuration(topCaller?.duration || 0)})
               </Typography>
             </Box>
+
+            {/* One place: calls count + talk time (+ direction breakdown) for selected user */}
+            {users.length > 0 && (
+              <Box
+                sx={{
+                  backgroundColor: 'var(--surface)',
+                  borderRadius: 3,
+                  border: '1px solid var(--border)',
+                  borderLeft: '4px solid',
+                  borderLeftColor: compareUserIndex >= 0 ? getColor(compareUserIndex) : 'var(--accent)',
+                  p: 3,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 2.5,
+                }}
+              >
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 2, justifyContent: 'space-between' }}>
+                  <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text2)' }}>
+                    User snapshot — calls &amp; talk time
+                  </Typography>
+                  <FormControl size="small" sx={{ minWidth: 260 }}>
+                    <InputLabel id="dash-compare-user-label">User</InputLabel>
+                    <Select
+                      labelId="dash-compare-user-label"
+                      label="User"
+                      value={compareUserId}
+                      onChange={(e) => setCompareUserId(String(e.target.value))}
+                      sx={{ color: 'var(--text)', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--border2)' } }}
+                    >
+                      {users.map((u) => (
+                        <MenuItem key={String(u.id)} value={String(u.id)}>
+                          {getDisplayName(u, users)}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
+
+                {compareStats ? (
+                  <>
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                        gap: 3,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          p: 2.5,
+                          borderRadius: 2,
+                          backgroundColor: 'var(--surface2)',
+                          border: '1px solid var(--border2)',
+                        }}
+                      >
+                        <Typography sx={{ fontSize: '0.8rem', color: 'var(--text3)', fontWeight: 600, mb: 0.5 }}>
+                          Calls in range
+                        </Typography>
+                        <Typography sx={{ fontSize: '2.25rem', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>
+                          {compareStats.callsCount}
+                        </Typography>
+                      </Box>
+                      <Box
+                        sx={{
+                          p: 2.5,
+                          borderRadius: 2,
+                          backgroundColor: 'var(--surface2)',
+                          border: '1px solid var(--border2)',
+                        }}
+                      >
+                        <Typography sx={{ fontSize: '0.8rem', color: 'var(--text3)', fontWeight: 600, mb: 0.5 }}>
+                          Talk time
+                        </Typography>
+                        <Typography sx={{ fontSize: '2.25rem', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
+                          {fmtDuration(compareStats.duration)}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
+                      <Typography sx={{ fontSize: '0.8rem', color: 'var(--text3)', fontWeight: 600, mr: 0.5 }}>
+                        By direction
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label={`Outbound ${compareStats.outbound}`}
+                        sx={{ backgroundColor: 'rgba(0,217,245,0.15)', color: 'var(--accent)', border: '1px solid rgba(0,217,245,0.35)', fontWeight: 600 }}
+                      />
+                      <Chip
+                        size="small"
+                        label={`Inbound ${compareStats.inbound}`}
+                        sx={{ backgroundColor: 'rgba(155,125,255,0.15)', color: 'var(--purple)', border: '1px solid rgba(155,125,255,0.35)', fontWeight: 600 }}
+                      />
+                      <Chip
+                        size="small"
+                        label={`Missed ${compareStats.missed}`}
+                        sx={{ backgroundColor: 'rgba(255,69,102,0.12)', color: 'var(--red)', border: '1px solid rgba(255,69,102,0.35)', fontWeight: 600 }}
+                      />
+                    </Box>
+                  </>
+                ) : (
+                  <Typography sx={{ color: 'var(--text3)', fontSize: '0.9rem' }}>Select a user to see stats.</Typography>
+                )}
+              </Box>
+            )}
 
             {/* Charts row 1 */}
             <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1.8fr)', gap: 3 }}>
