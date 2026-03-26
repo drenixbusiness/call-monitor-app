@@ -23,6 +23,7 @@ type UserStats = {
   callsConnected: number;
   callsMissed: number;
   leadsRejected: number;
+  leadsFollowUp: number;
 };
 
 interface AIReportResult {
@@ -32,7 +33,16 @@ interface AIReportResult {
 
 async function fetchAIReport(
   statsList: UserStats[],
-  totals: { talk: number; total: number; onTime: number; late: number; connected: number; missed: number; rejected: number }
+  totals: {
+    talk: number;
+    total: number;
+    onTime: number;
+    late: number;
+    connected: number;
+    missed: number;
+    rejected: number;
+    followUp: number;
+  }
 ): Promise<AIReportResult | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
@@ -40,7 +50,7 @@ async function fetchAIReport(
   const userData = statsList
     .map(
       (s) =>
-        `${s.name}: talk ${s.talkMinutes} min, leads ${s.leadsTotal} total (${s.leadsOnTime} on-time / ${s.leadsLate} late), calls ${s.callsConnected} connected / ${s.callsMissed} missed, rejected ${s.leadsRejected}`
+        `${s.name}: talk ${s.talkMinutes} min, leads ${s.leadsTotal} total (${s.leadsOnTime} on-time / ${s.leadsLate} late, ${s.leadsFollowUp} follow-up), calls ${s.callsConnected} connected / ${s.callsMissed} missed, rejected ${s.leadsRejected}`
     )
     .join('\n');
 
@@ -52,7 +62,7 @@ Respond ONLY with valid JSON in this exact format (no markdown, no code block):
 {"dailyOutcome":"...","advice":[{"name":"Full Name","advice":"..."}]}`;
 
   const exactNames = statsList.map((s) => s.name).join(', ');
-  const userPrompt = `Today's shift stats (9am-6pm CDT / 8am-5pm CST US Central). Team totals: talk ${totals.talk} min, leads ${totals.total} total (${totals.onTime} on-time / ${totals.late} late), calls ${totals.connected} connected / ${totals.missed} missed, rejected ${totals.rejected}.
+  const userPrompt = `Today's shift stats (9am-6pm CDT / 8am-5pm CST US Central). Team totals: talk ${totals.talk} min, leads ${totals.total} total (${totals.onTime} on-time / ${totals.late} late, ${totals.followUp} follow-up), calls ${totals.connected} connected / ${totals.missed} missed, rejected ${totals.rejected}.
 
 Per recruiter:
 ${userData}
@@ -105,6 +115,7 @@ function aggregateTotals(statsList: UserStats[]) {
   let totalConnected = 0;
   let totalMissed = 0;
   let totalRejected = 0;
+  let totalFollowUp = 0;
   for (const s of statsList) {
     totalTalk += s.talkMinutes;
     totalLeads += s.leadsTotal;
@@ -113,6 +124,7 @@ function aggregateTotals(statsList: UserStats[]) {
     totalConnected += s.callsConnected;
     totalMissed += s.callsMissed;
     totalRejected += s.leadsRejected;
+    totalFollowUp += s.leadsFollowUp;
   }
   return {
     talk: totalTalk,
@@ -122,6 +134,7 @@ function aggregateTotals(statsList: UserStats[]) {
     connected: totalConnected,
     missed: totalMissed,
     rejected: totalRejected,
+    followUp: totalFollowUp,
   };
 }
 
@@ -156,7 +169,7 @@ function buildReportMessage(
 
   for (const s of statsList) {
     msg += `👤 *${s.name}*\n`;
-    msg += `   Talk: ${s.talkMinutes} min | Leads: ${s.leadsTotal} total (${s.leadsOnTime} on-time, ${s.leadsLate} late) | Calls: ${s.callsConnected} connected, ${s.callsMissed} missed | Rejected: ${s.leadsRejected}\n`;
+    msg += `   Talk: ${s.talkMinutes} min | Leads: ${s.leadsTotal} total (${s.leadsOnTime} on-time, ${s.leadsLate} late, ${s.leadsFollowUp} follow-up) | Calls: ${s.callsConnected} connected, ${s.callsMissed} missed | Rejected: ${s.leadsRejected}\n`;
     const adv = aiReport ? adviceForStatName(s.name, aiReport.advice) : undefined;
     if (adv) msg += `\n   💡 *Advice:* ${adv}\n`;
     msg += `\n`;
@@ -167,7 +180,7 @@ function buildReportMessage(
   }
 
   msg += `📈 *TOTAL (${statsList.length} users)*\n`;
-  msg += `   Talk: ${totals.talk} min | Leads: ${totals.total} total (${totals.onTime} on-time, ${totals.late} late) | Calls: ${totals.connected} connected, ${totals.missed} missed | Rejected: ${totals.rejected}`;
+  msg += `   Talk: ${totals.talk} min | Leads: ${totals.total} total (${totals.onTime} on-time, ${totals.late} late, ${totals.followUp} follow-up) | Calls: ${totals.connected} connected, ${totals.missed} missed | Rejected: ${totals.rejected}`;
 
   const TELEGRAM_MAX_LENGTH = 4096;
   if (msg.length > TELEGRAM_MAX_LENGTH) {
@@ -470,6 +483,7 @@ export async function GET(request: Request) {
       callsConnected: 0,
       callsMissed: 0,
       leadsRejected: 0,
+      leadsFollowUp: 0,
     };
   }
 
@@ -506,6 +520,7 @@ export async function GET(request: Request) {
           callsConnected: 0,
           callsMissed: 0,
           leadsRejected: 0,
+          leadsFollowUp: 0,
         };
       }
       const s = statsByUser[key];
@@ -528,6 +543,16 @@ export async function GET(request: Request) {
           if (lead.timing === 'On time') s.leadsOnTime += 1;
           else if (lead.timing === 'Late') s.leadsLate += 1;
           if (lead.status === 'Rejected') s.leadsRejected += 1;
+          const st = typeof lead.status === 'string' ? lead.status.trim() : '';
+          const stLower = st.toLowerCase();
+          if (
+            st === 'Follow up' ||
+            stLower === 'follow-up' ||
+            /^follow\s*up$/i.test(st) ||
+            (stLower.includes('follow') && stLower.includes('up'))
+          ) {
+            s.leadsFollowUp += 1;
+          }
         }
         return { rcName, debug: { count: leads.length, ok: true } };
       } catch (err: unknown) {
