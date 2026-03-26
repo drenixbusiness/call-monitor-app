@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getShiftWindowISO, getReportDayRangeISO, getShiftHours, getReportCallsRangeTashkentISO } from '@/utils/leadShift';
 
-export const maxDuration = 60;
+/** Room for RC + Monday + multiple OpenAI calls (team + admin per deploy). */
+export const maxDuration = 120;
 import { getServerDeployAccount } from '@/lib/deployAccount';
 import { WHITELIST_ACCOUNT1, WHITELIST_ACCOUNT2 } from '@/lib/whitelist';
 import {
@@ -50,10 +51,13 @@ async function fetchAIReport(
 Respond ONLY with valid JSON in this exact format (no markdown, no code block):
 {"dailyOutcome":"...","advice":[{"name":"Full Name","advice":"..."}]}`;
 
+  const exactNames = statsList.map((s) => s.name).join(', ');
   const userPrompt = `Today's shift stats (9am-6pm CDT / 8am-5pm CST US Central). Team totals: talk ${totals.talk} min, leads ${totals.total} total (${totals.onTime} on-time / ${totals.late} late), calls ${totals.connected} connected / ${totals.missed} missed, rejected ${totals.rejected}.
 
 Per recruiter:
 ${userData}
+
+In the JSON "advice" array, use these EXACT "name" strings (same spelling as above): ${exactNames}
 
 Return JSON only.`;
 
@@ -121,6 +125,23 @@ function aggregateTotals(statsList: UserStats[]) {
   };
 }
 
+/** Match OpenAI advice rows to RC names (exact, then first/last name). */
+function adviceForStatName(
+  statsName: string,
+  advice: { name: string; advice: string }[]
+): string | undefined {
+  const sn = statsName.trim().toLowerCase();
+  for (const a of advice) {
+    if (a.name.trim().toLowerCase() === sn) return a.advice;
+  }
+  const first = sn.split(/\s+/)[0] || '';
+  for (const a of advice) {
+    const an = a.name.trim().toLowerCase();
+    if (an === first || sn.startsWith(an + ' ') || an.startsWith(first)) return a.advice;
+  }
+  return undefined;
+}
+
 function buildReportMessage(
   statsList: UserStats[],
   aiReport: AIReportResult | null,
@@ -129,9 +150,6 @@ function buildReportMessage(
   companyLabel: string
 ): string {
   const totals = aggregateTotals(statsList);
-  const adviceByName = aiReport
-    ? Object.fromEntries(aiReport.advice.map((a) => [a.name, a.advice]))
-    : ({} as Record<string, string>);
 
   let msg = `📊 *HR Daily Report — ${companyLabel} — ${reportDateStr}*\n`;
   msg += `Shift: ${shiftLabel} US Central (7pm–4am Tashkent)\n\n`;
@@ -139,7 +157,7 @@ function buildReportMessage(
   for (const s of statsList) {
     msg += `👤 *${s.name}*\n`;
     msg += `   Talk: ${s.talkMinutes} min | Leads: ${s.leadsTotal} total (${s.leadsOnTime} on-time, ${s.leadsLate} late) | Calls: ${s.callsConnected} connected, ${s.callsMissed} missed | Rejected: ${s.leadsRejected}\n`;
-    const adv = adviceByName[s.name];
+    const adv = aiReport ? adviceForStatName(s.name, aiReport.advice) : undefined;
     if (adv) msg += `\n   💡 *Advice:* ${adv}\n`;
     msg += `\n`;
   }
@@ -609,6 +627,7 @@ export async function GET(request: Request) {
         hasRc1: !!(rc1ClientId && rc1ClientSecret && rc1Jwt),
         hasPostgres: !!process.env.POSTGRES_URL,
         hasMonday: !!process.env.MONDAY_API_TOKEN,
+        hasOpenAI: !!process.env.OPENAI_API_KEY,
         telegram: {
           TELEGRAM_BP_TEAM_CHAT_ID: !!envBpTeam,
           TELEGRAM_BP_ADMIN_OR_HEAD_CHAT_ID: !!envBpAdmin,
