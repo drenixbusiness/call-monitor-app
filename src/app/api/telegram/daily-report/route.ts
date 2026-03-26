@@ -189,21 +189,57 @@ function buildReportMessage(
   return msg;
 }
 
-async function sendTelegramMessage(token: string, chatId: string, text: string): Promise<{ ok: boolean; error?: string }> {
-  const sendRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: 'Markdown',
-    }),
-  });
-  if (!sendRes.ok) {
-    const err = await sendRes.text();
-    return { ok: false, error: err };
+/**
+ * Telegram returns HTTP 200 with {"ok":false,...} for many API errors — must parse JSON.
+ * Supergroup upgrade: old group chat_id stops working; API returns migrate_to_chat_id — retry once.
+ */
+async function sendTelegramMessage(
+  token: string,
+  chatId: string,
+  text: string
+): Promise<{ ok: boolean; error?: string; migratedTo?: string }> {
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  let attemptChatId: string | number = chatId;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: attemptChatId,
+        text,
+        parse_mode: 'Markdown',
+      }),
+    });
+    const raw = await res.text();
+    let data: {
+      ok?: boolean;
+      error_code?: number;
+      description?: string;
+      parameters?: { migrate_to_chat_id?: number };
+    };
+    try {
+      data = JSON.parse(raw) as typeof data;
+    } catch {
+      return { ok: false, error: raw || `HTTP ${res.status}` };
+    }
+    if (data.ok === true) {
+      return attempt > 0 ? { ok: true, migratedTo: String(attemptChatId) } : { ok: true };
+    }
+
+    const migrateId = data.parameters?.migrate_to_chat_id;
+    if (
+      attempt === 0 &&
+      typeof migrateId === 'number' &&
+      data.description?.toLowerCase().includes('supergroup')
+    ) {
+      console.warn('[telegram/daily-report] Supergroup migration, retrying with chat_id:', migrateId);
+      attemptChatId = migrateId;
+      continue;
+    }
+    return { ok: false, error: raw };
   }
-  return { ok: true };
+  return { ok: false, error: 'Telegram send failed after migration retry' };
 }
 
 interface UserWithExt {
