@@ -541,9 +541,12 @@ export async function GET(request: Request) {
 
   const chatLegacy = process.env.TELEGRAM_CHAT_ID;
   const envBpTeam = process.env.TELEGRAM_BP_TEAM_CHAT_ID;
-  const envBpAdmin = process.env.TELEGRAM_BP_ADMIN_CHAT_ID;
+  /** Admin / head group — support TELEGRAM_*_HEAD_CHAT_ID (Vercel naming) or *_ADMIN_CHAT_ID */
+  const envBpAdmin =
+    process.env.TELEGRAM_BP_ADMIN_CHAT_ID || process.env.TELEGRAM_BP_HEAD_CHAT_ID;
   const envJmTeam = process.env.TELEGRAM_JM_TEAM_CHAT_ID;
-  const envJmAdmin = process.env.TELEGRAM_JM_ADMIN_CHAT_ID;
+  const envJmAdmin =
+    process.env.TELEGRAM_JM_ADMIN_CHAT_ID || process.env.TELEGRAM_JM_HEAD_CHAT_ID;
 
   const buildTeamAiAndMessage = async (team: UserStats[], label: string) => {
     const totals = aggregateTotals(team);
@@ -608,10 +611,11 @@ export async function GET(request: Request) {
         hasMonday: !!process.env.MONDAY_API_TOKEN,
         telegram: {
           TELEGRAM_BP_TEAM_CHAT_ID: !!envBpTeam,
-          TELEGRAM_BP_ADMIN_CHAT_ID: !!envBpAdmin,
+          TELEGRAM_BP_ADMIN_OR_HEAD_CHAT_ID: !!envBpAdmin,
           TELEGRAM_JM_TEAM_CHAT_ID: !!envJmTeam,
-          TELEGRAM_JM_ADMIN_CHAT_ID: !!envJmAdmin,
+          TELEGRAM_JM_ADMIN_OR_HEAD_CHAT_ID: !!envJmAdmin,
           TELEGRAM_CHAT_ID: !!chatLegacy,
+          VERCEL_AUTOMATION_BYPASS_SECRET: !!process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
         },
       },
       message: msgAll,
