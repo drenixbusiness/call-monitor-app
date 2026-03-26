@@ -1,3 +1,5 @@
+# Triggers the Next.js route `/api/telegram/daily-report` on your deployed app.
+# All Telegram + RingCentral + Monday + OpenAI env vars must be set on the host (e.g. Vercel), not in GitHub.
 name: HR Daily Report
 
 on:
@@ -18,31 +20,31 @@ jobs:
   report:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      NODE_VERSION: '22'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Run daily report
+      - name: Trigger daily report API
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          RC_CLIENT_ID: ${{ secrets.RC_CLIENT_ID }}
-          RC_CLIENT_SECRET: ${{ secrets.RC_CLIENT_SECRET }}
-          RC_JWT: ${{ secrets.RC_JWT }}
-          RC2_CLIENT_ID: ${{ secrets.RC2_CLIENT_ID }}
-          RC2_CLIENT_SECRET: ${{ secrets.RC2_CLIENT_SECRET }}
-          RC2_JWT: ${{ secrets.RC2_JWT }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          APP_URL: ${{ secrets.APP_URL || 'https://call-monitor-app.vercel.app' }}
-          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-          REPORT_DATE: ${{ github.event.inputs.date }}
-          SKIP_AI: ${{ github.event.inputs.skip_ai }}
-        run: node scripts/daily-report.mjs
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          INPUT_DATE: ${{ github.event.inputs.date }}
+          INPUT_SKIP_AI: ${{ github.event.inputs.skip_ai }}
+        run: |
+          set -e
+          if [ -z "$APP_URL" ]; then
+            echo "Set GitHub secret APP_URL to your production base URL (e.g. https://your-app.vercel.app)"
+            exit 1
+          fi
+          BASE="${APP_URL%/}"
+          QUERY=""
+          if [ -n "$INPUT_DATE" ]; then
+            QUERY="?date=${INPUT_DATE}"
+          fi
+          if [ "$INPUT_SKIP_AI" = "1" ]; then
+            if [ -z "$QUERY" ]; then QUERY="?skipAI=1"; else QUERY="${QUERY}&skipAI=1"; fi
+          fi
+          URL="${BASE}/api/telegram/daily-report${QUERY}"
+          echo "GET $URL"
+          if [ -n "$CRON_SECRET" ]; then
+            curl -fsS -H "Authorization: Bearer ${CRON_SECRET}" "$URL"
+          else
+            curl -fsS "$URL"
+          fi

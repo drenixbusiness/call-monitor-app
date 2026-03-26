@@ -1,6 +1,6 @@
 /**
- * HR recruiters for daily Telegram report.
- * 5 users (excludes Tony Safety Department, Henry Safety Department).
+ * HR recruiters (Monday sidebar / legacy naming).
+ * Safety users are not on Monday — see `telegramReport.ts` for Telegram RC lists.
  */
 
 export const HR_RECRUITERS = [

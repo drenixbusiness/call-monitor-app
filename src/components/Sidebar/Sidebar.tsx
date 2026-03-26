@@ -7,6 +7,7 @@ import { useState, useMemo } from 'react';
 import SearchIcon from '@mui/icons-material/Search';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BarChartIcon from '@mui/icons-material/BarChart';
+import ViewModuleIcon from '@mui/icons-material/ViewModule';
 import { getClientDeployAccount } from '@/lib/deployAccount';
 import { getMondayUsersForDeploy } from '@/lib/whitelist';
 
@@ -16,6 +17,7 @@ export default function Sidebar({
   selectedUser,
   onSelect,
   activeView,
+  onSelectMainDashboard,
   onSelectDashboard,
   onSelectMondayLeads,
   selectedMondayUser,
@@ -26,7 +28,8 @@ export default function Sidebar({
   allCalls: UserCalls;
   selectedUser: RCUser | null;
   onSelect: (user: RCUser) => void;
-  activeView: 'overview' | 'user' | 'monday-leads';
+  activeView: 'main-dashboard' | 'overview' | 'user' | 'monday-leads';
+  onSelectMainDashboard?: () => void;
   onSelectDashboard: () => void;
   onSelectMondayLeads?: () => void;
   selectedMondayUser?: string | null;
@@ -46,6 +49,8 @@ export default function Sidebar({
   }, [users, search]);
 
   const isMondayLeads = activeView === 'monday-leads';
+  const isMainDashboard = activeView === 'main-dashboard';
+  const showUserList = !isMainDashboard;
 
   return (
     <Drawer
@@ -67,8 +72,41 @@ export default function Sidebar({
         },
       }}
     >
-      {/* Div 1: Nav items - Dashboard, Monday Leads */}
+      {/* Div 1: Nav — Main Dashboard, calls Dashboard, Monday Leads */}
       <Box sx={{ flexShrink: 0 }}>
+        {onSelectMainDashboard && (
+          <ListItemButton
+            onClick={onSelectMainDashboard}
+            selected={isMainDashboard}
+            sx={{
+              py: 4.1,
+              px: 2,
+              borderBottom: '1px solid var(--border)',
+              borderLeft: isMainDashboard ? '3px solid var(--accent)' : '3px solid transparent',
+              backgroundColor: isMainDashboard ? 'rgba(0, 217, 245, 0.05)' : 'transparent',
+              '&.Mui-selected': {
+                backgroundColor: 'rgba(0, 217, 245, 0.05)',
+                '&:hover': { backgroundColor: 'rgba(0, 217, 245, 0.08)' }
+              },
+              '&:hover': { backgroundColor: 'var(--surface2)' }
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 2 }}>
+              <Avatar sx={{ bgcolor: 'var(--surface3)', width: 36, height: 36, borderRadius: 2 }}>
+                <ViewModuleIcon sx={{ fontSize: '1.2rem', color: isMainDashboard ? 'var(--accent)' : 'var(--text2)' }} />
+              </Avatar>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography noWrap sx={{ fontWeight: 700, fontSize: '0.95rem', color: isMainDashboard ? 'var(--accent)' : 'var(--text2)' }}>
+                  Main Dashboard
+                </Typography>
+                <Typography noWrap sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--text3)' }}>
+                  Leads overview
+                </Typography>
+              </Box>
+            </Box>
+          </ListItemButton>
+        )}
+
         <ListItemButton
           onClick={onSelectDashboard}
           selected={activeView === 'overview'}
@@ -94,7 +132,7 @@ export default function Sidebar({
                 Dashboard
               </Typography>
               <Typography noWrap sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--text3)' }}>
-                Overview
+                Calls overview
               </Typography>
             </Box>
           </Box>
@@ -136,8 +174,16 @@ export default function Sidebar({
 
       <Divider sx={{ borderColor: 'var(--border)' }} />
 
-      {/* Div 2: Users section - scrollable */}
+      {/* Div 2: Users / Monday list — hidden on Main Dashboard */}
       <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {!showUserList ? (
+          <Box sx={{ p: 2, flex: 1 }}>
+            <Typography sx={{ fontSize: '0.85rem', color: 'var(--text3)', lineHeight: 1.5 }}>
+              Use the <strong>People</strong> control in the main area to filter recruiters. Company scope (BP vs JM) matches this deployment.
+            </Typography>
+          </Box>
+        ) : (
+        <>
         <Box sx={{ p: 2, borderBottom: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text2)', letterSpacing: '1px' }}>
             USERS &middot; {isMondayLeads ? mondayUsers.length : filteredUsers.length}
@@ -264,6 +310,8 @@ export default function Sidebar({
             })
           )}
         </List>
+        </>
+        )}
       </Box>
     </Drawer>
   );

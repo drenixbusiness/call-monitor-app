@@ -1,8 +1,18 @@
 import type { RcDeployAccount } from '@/lib/deployAccount';
 
 /** Shared user whitelists - must stay in sync across dashboard, sync, account2 APIs */
-export const WHITELIST_ACCOUNT1: readonly string[] = ['Ethan Parker', 'Fred Royce'];
-export const WHITELIST_ACCOUNT2: readonly string[] = ['Winston Smith', 'Alex Chester', 'Jessica Miller', 'Isaac Taylor'];
+export const WHITELIST_ACCOUNT1: readonly string[] = [
+  'Ethan Parker',
+  'Fred Royce',
+  'Tony Safety Department',
+];
+export const WHITELIST_ACCOUNT2: readonly string[] = [
+  'Winston Smith',
+  'Alex Chester',
+  'Jessica Miller',
+  'Isaac Taylor',
+  'Henry Safety Department',
+];
 
 /** Monday Leads sidebar names per deploy (must match USER_BOARD_MAP keys in api/monday/leads). */
 export const MONDAY_USERS_ACCOUNT1: readonly string[] = ['Fred', 'Ethan'];

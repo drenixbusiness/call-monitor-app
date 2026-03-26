@@ -1,14 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getShiftWindowISO, getReportDayRangeISO } from '@/utils/leadShift';
-import { WHITELIST_ACCOUNT1 } from '@/lib/whitelist';
-
-const HR_RC_NAMES = new Set([
-  'Ethan Parker',
-  'Fred Royce',
-  'Alex Chester',
-  'Winston Smith',
-  'Jessica Miller',
-]);
+import { WHITELIST_ACCOUNT1, WHITELIST_ACCOUNT2 } from '@/lib/whitelist';
+import { HR_REPORT_RC_NAMES } from '@/lib/telegramReport';
 
 const RC_TOKEN_URL = 'https://platform.ringcentral.com/restapi/oauth/token';
 const RC_BASE = 'https://platform.ringcentral.com/restapi';
@@ -69,7 +62,7 @@ export async function GET() {
             const data: { records?: any[]; navigation?: { nextPage?: { uri?: string } } } = await res.json();
             const records = data.records || [];
             for (const u of records) {
-              if (WHITELIST_ACCOUNT1.includes(u.name) && HR_RC_NAMES.has(u.name)) {
+              if (WHITELIST_ACCOUNT1.includes(u.name) && HR_REPORT_RC_NAMES.has(u.name)) {
                 users.push({ id: String(u.id), name: u.name });
               }
             }
@@ -119,7 +112,9 @@ export async function GET() {
           }
           account2RawCount = allAcc2.length;
           account2UserNames = allAcc2.map((u) => u.name);
-          const acc2 = allAcc2.filter((u) => HR_RC_NAMES.has(u.name));
+          const acc2 = allAcc2.filter(
+            (u) => HR_REPORT_RC_NAMES.has(u.name) && WHITELIST_ACCOUNT2.includes(u.name)
+          );
           acc2Count = acc2.length;
           users.push(...acc2);
         }

@@ -5,7 +5,16 @@ import { useEffect, useState } from 'react';
 import { clearRcCredentialsFromStorage } from '@/lib/rcCredentialsStorage';
 import { getClientDeployAccount } from '@/lib/deployAccount';
 
-export default function Header({ status }: { status: 'idle' | 'connected' | 'error' }) {
+export default function Header({
+  status,
+  showRingCentral = true,
+  showLive = true,
+}: {
+  status: 'idle' | 'connected' | 'error';
+  /** Hide RingCentral chip on lead-only views (e.g. Main Dashboard). */
+  showRingCentral?: boolean;
+  showLive?: boolean;
+}) {
   const [time, setTime] = useState<string | null>(null);
 
   const handleLogout = () => {
@@ -99,33 +108,39 @@ export default function Header({ status }: { status: 'idle' | 'connected' | 'err
             </Box>
           </Typography>
 
-          <Box sx={{ height: 20, width: '1px', backgroundColor: 'var(--border2)' }} />
+          {showRingCentral && (
+            <>
+              <Box sx={{ height: 20, width: '1px', backgroundColor: 'var(--border2)' }} />
 
-          <Chip
-            label="RingCentral"
-            size="small"
-            sx={{
-              height: 24,
-              backgroundColor: 'var(--surface3)',
-              color: 'var(--text2)',
-              fontSize: '0.95rem',
-              fontWeight: 600
-            }}
-          />
+              <Chip
+                label="RingCentral"
+                size="small"
+                sx={{
+                  height: 24,
+                  backgroundColor: 'var(--surface3)',
+                  color: 'var(--text2)',
+                  fontSize: '0.95rem',
+                  fontWeight: 600
+                }}
+              />
+            </>
+          )}
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{
-              width: 6, height: 6,
-              borderRadius: '50%',
-              backgroundColor: 'var(--green)',
-              animation: 'breathe 2s infinite ease-in-out'
-            }} />
-            <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--green)', letterSpacing: '1px' }}>
-              LIVE
-            </Typography>
-          </Box>
+          {showLive && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{
+                width: 6, height: 6,
+                borderRadius: '50%',
+                backgroundColor: 'var(--green)',
+                animation: 'breathe 2s infinite ease-in-out'
+              }} />
+              <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--green)', letterSpacing: '1px' }}>
+                LIVE
+              </Typography>
+            </Box>
+          )}
 
           <Typography sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.95rem', color: 'var(--text2)' }}>
             {time ?? ''}

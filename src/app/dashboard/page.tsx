@@ -9,6 +9,7 @@ import StatsRow from '@/components/StatsRow/StatsRow';
 import UserDetail from '@/components/UserDetail/UserDetail';
 import DashboardOverview from '@/components/DashboardOverview/DashboardOverview';
 import UserLeadsDetail from '@/components/UserLeadsDetail/UserLeadsDetail';
+import MainDashboard from '@/components/MainDashboard/MainDashboard';
 import { RCUser, UserCalls } from '@/types';
 import { useGlobalContext } from '@/components/GlobalContext';
 import { useRouter } from 'next/navigation';
@@ -24,7 +25,7 @@ export default function Home() {
   const mondayUsersList = getMondayUsersForDeploy(deploy);
 
   const { users, setUsers, allCalls, setAllCalls, selectedUser, setSelectedUser, globalDateFilter, setGlobalDateFilter } = useGlobalContext();
-  const [activeView, setActiveView] = useState<'overview' | 'user' | 'monday-leads'>('overview');
+  const [activeView, setActiveView] = useState<'main-dashboard' | 'overview' | 'user' | 'monday-leads'>('main-dashboard');
   const [selectedMondayUser, setSelectedMondayUser] = useState<string | null>(() => mondayUsersList[0] ?? null);
   const [mondayLeadsCache, setMondayLeadsCache] = useState<Record<string, { leads: any[]; statusCounts: Record<string, number>; ts: number }>>({});
   const [hasMounted, setHasMounted] = useState(false);
@@ -144,13 +145,13 @@ export default function Home() {
       if (hasCachedData) {
         await loadCallsFromDb(allFilteredUsers);
         setShowConfig(false);
-        setActiveView('overview');
+        setActiveView('main-dashboard');
         setIsLoading(false);
         setSyncPhase('done');
         router.push('/dashboard');
       } else {
         setShowConfig(false);
-        setActiveView('overview');
+        setActiveView('main-dashboard');
         setIsLoading(false);
         setSyncPhase('syncing');
       }
@@ -241,7 +242,11 @@ export default function Home() {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw' }}>
-      <Header status={status} />
+      <Header
+        status={status}
+        showRingCentral={showConfig || activeView !== 'main-dashboard'}
+        showLive={showConfig || activeView !== 'main-dashboard'}
+      />
 
       {syncPhase === 'syncing' && (
         <Box sx={{ px: 2, py: 0.5, background: 'var(--surface2)', display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -275,6 +280,7 @@ export default function Home() {
               selectedUser={selectedUser}
               onSelect={handleSelectUser}
               activeView={activeView}
+              onSelectMainDashboard={() => setActiveView('main-dashboard')}
               onSelectDashboard={() => setActiveView('overview')}
               onSelectMondayLeads={() => setActiveView('monday-leads')}
               selectedMondayUser={selectedMondayUser}
@@ -282,7 +288,10 @@ export default function Home() {
               mondayUsers={mondayUsersList}
             />
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', pb: 6 }}>
-              {activeView !== 'monday-leads' && <StatsRow users={users} allCalls={allCalls} />}
+              {activeView !== 'monday-leads' && activeView !== 'main-dashboard' && (
+                <StatsRow users={users} allCalls={allCalls} />
+              )}
+              {activeView !== 'main-dashboard' && (
               <Box sx={{ px: 3, pt: 2, pb: 1, display: 'flex', justifyContent: activeView === 'monday-leads' ? 'space-between' : 'flex-end', alignItems: 'center' }}>
                 {activeView === 'monday-leads' && (
                   <Typography sx={{ fontSize: '1rem', color: 'var(--text2)' }}>Monday Leads</Typography>
@@ -315,6 +324,19 @@ export default function Home() {
                   </ToggleButton>
                   <ToggleButton value="monday-leads">Monday Leads</ToggleButton>
                 </ToggleButtonGroup>
+              </Box>
+              )}
+              {/* Keep mounted so returning from Calls / Monday Leads does not remount & refetch */}
+              <Box
+                sx={{
+                  display: activeView === 'main-dashboard' ? 'flex' : 'none',
+                  flex: 1,
+                  minHeight: 0,
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                }}
+              >
+                <MainDashboard mondayUsers={mondayUsersList} />
               </Box>
               {activeView === 'overview' && (
                 <DashboardOverview users={users} allCalls={allCalls} />

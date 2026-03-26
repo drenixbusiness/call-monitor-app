@@ -4,6 +4,14 @@ import { getShiftWindowISO, getReportDayRangeISO, getShiftHours, getReportCallsR
 export const maxDuration = 60;
 import { getServerDeployAccount } from '@/lib/deployAccount';
 import { WHITELIST_ACCOUNT1, WHITELIST_ACCOUNT2 } from '@/lib/whitelist';
+import {
+  HR_REPORT_RC_NAMES,
+  TELEGRAM_REPORT_ROWS_ALL,
+  filterBpAdminGroup,
+  filterBpTeamGroup,
+  filterJmAdminGroup,
+  filterJmTeamGroup,
+} from '@/lib/telegramReport';
 
 type UserStats = {
   name: string;
@@ -85,14 +93,87 @@ Return JSON only.`;
   }
 }
 
-/** HR recruiter RC names (exclude Safety) */
-const HR_RC_NAMES = new Set([
-  'Ethan Parker',
-  'Fred Royce',
-  'Alex Chester',
-  'Winston Smith',
-  'Jessica Miller',
-]);
+function aggregateTotals(statsList: UserStats[]) {
+  let totalTalk = 0;
+  let totalLeads = 0;
+  let totalOnTime = 0;
+  let totalLate = 0;
+  let totalConnected = 0;
+  let totalMissed = 0;
+  let totalRejected = 0;
+  for (const s of statsList) {
+    totalTalk += s.talkMinutes;
+    totalLeads += s.leadsTotal;
+    totalOnTime += s.leadsOnTime;
+    totalLate += s.leadsLate;
+    totalConnected += s.callsConnected;
+    totalMissed += s.callsMissed;
+    totalRejected += s.leadsRejected;
+  }
+  return {
+    talk: totalTalk,
+    total: totalLeads,
+    onTime: totalOnTime,
+    late: totalLate,
+    connected: totalConnected,
+    missed: totalMissed,
+    rejected: totalRejected,
+  };
+}
+
+function buildReportMessage(
+  statsList: UserStats[],
+  aiReport: AIReportResult | null,
+  reportDateStr: string,
+  shiftLabel: string,
+  companyLabel: string
+): string {
+  const totals = aggregateTotals(statsList);
+  const adviceByName = aiReport
+    ? Object.fromEntries(aiReport.advice.map((a) => [a.name, a.advice]))
+    : ({} as Record<string, string>);
+
+  let msg = `📊 *HR Daily Report — ${companyLabel} — ${reportDateStr}*\n`;
+  msg += `Shift: ${shiftLabel} US Central (7pm–4am Tashkent)\n\n`;
+
+  for (const s of statsList) {
+    msg += `👤 *${s.name}*\n`;
+    msg += `   Talk: ${s.talkMinutes} min | Leads: ${s.leadsTotal} total (${s.leadsOnTime} on-time, ${s.leadsLate} late) | Calls: ${s.callsConnected} connected, ${s.callsMissed} missed | Rejected: ${s.leadsRejected}\n`;
+    const adv = adviceByName[s.name];
+    if (adv) msg += `\n   💡 *Advice:* ${adv}\n`;
+    msg += `\n`;
+  }
+
+  if (aiReport) {
+    msg += `📋 *Daily Outcome*\n${aiReport.dailyOutcome}\n\n`;
+  }
+
+  msg += `📈 *TOTAL (${statsList.length} users)*\n`;
+  msg += `   Talk: ${totals.talk} min | Leads: ${totals.total} total (${totals.onTime} on-time, ${totals.late} late) | Calls: ${totals.connected} connected, ${totals.missed} missed | Rejected: ${totals.rejected}`;
+
+  const TELEGRAM_MAX_LENGTH = 4096;
+  if (msg.length > TELEGRAM_MAX_LENGTH) {
+    msg = msg.slice(0, TELEGRAM_MAX_LENGTH - 20) + '\n\n...[truncated]';
+  }
+  return msg;
+}
+
+async function sendTelegramMessage(token: string, chatId: string, text: string): Promise<{ ok: boolean; error?: string }> {
+  const sendRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      parse_mode: 'Markdown',
+    }),
+  });
+  if (!sendRes.ok) {
+    const err = await sendRes.text();
+    return { ok: false, error: err };
+  }
+  return { ok: true };
+}
 
 interface UserWithExt {
   id: string;
@@ -142,7 +223,7 @@ async function fetchUsersFromToken(
     const data: { records?: any[]; navigation?: { nextPage?: { uri?: string } } } = await res.json();
     const records = data.records || [];
     for (const u of records) {
-      if (!HR_RC_NAMES.has(u.name)) continue;
+      if (!HR_REPORT_RC_NAMES.has(u.name)) continue;
       if (mode === 'account1' || mode === 'legacy_rc1') {
         if (!WHITELIST_ACCOUNT1.includes(u.name)) continue;
       } else {
@@ -185,7 +266,7 @@ async function fetchAccount2Users(): Promise<UserWithExt[]> {
     const data: { records?: any[]; navigation?: { nextPage?: { uri?: string } } } = await res.json();
     const records = data.records || [];
     for (const u of records) {
-      if (HR_RC_NAMES.has(u.name) && WHITELIST_ACCOUNT2.includes(u.name)) {
+      if (HR_REPORT_RC_NAMES.has(u.name) && WHITELIST_ACCOUNT2.includes(u.name)) {
         users.push({ id: String(u.id), name: u.name });
       }
     }
@@ -201,14 +282,10 @@ export async function GET(request: Request) {
   const skipAI = searchParams.get('skipAI') === '1' || searchParams.get('skipAI') === 'true';
 
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
-
-  if (!token || !chatId) {
-    return NextResponse.json(
-      { error: 'TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set' },
-      { status: 500 }
-    );
+  if (!token) {
+    return NextResponse.json({ error: 'TELEGRAM_BOT_TOKEN must be set' }, { status: 500 });
   }
+  const telegramBotToken = token;
 
   // Optional: require CRON_SECRET when invoked by Vercel Cron (skip for debug)
   const authHeader = request.headers.get('authorization');
@@ -387,20 +464,13 @@ export async function GET(request: Request) {
     s.talkMinutes += Math.floor((c.duration || 0) / 60);
   }
 
-  /** RC display name -> Monday API user param. Filtered by deploy (BP vs JDM). */
-  const HR_RECRUITERS_ALL: { rcName: string; mondayUser: string }[] = [
-    { rcName: 'Alex Chester', mondayUser: 'Alex Chester' },
-    { rcName: 'Fred Royce', mondayUser: 'Fred' },
-    { rcName: 'Ethan Parker', mondayUser: 'Ethan' },
-    { rcName: 'Winston Smith', mondayUser: 'Winston' },
-    { rcName: 'Jessica Miller', mondayUser: 'Jessica' },
-  ];
+  /** RC display name -> Monday API user param (null = no Monday boards; skip leads fetch). */
   const HR_RECRUITERS =
     deploy === 'account1'
-      ? HR_RECRUITERS_ALL.filter((r) => WHITELIST_ACCOUNT1.includes(r.rcName))
+      ? TELEGRAM_REPORT_ROWS_ALL.filter((r) => WHITELIST_ACCOUNT1.includes(r.rcName))
       : deploy === 'account2'
-        ? HR_RECRUITERS_ALL.filter((r) => WHITELIST_ACCOUNT2.includes(r.rcName))
-        : HR_RECRUITERS_ALL;
+        ? TELEGRAM_REPORT_ROWS_ALL.filter((r) => WHITELIST_ACCOUNT2.includes(r.rcName))
+        : [...TELEGRAM_REPORT_ROWS_ALL];
 
   const leadsDebug: Record<string, { count: number; ok: boolean; status?: number; error?: string }> = {};
   const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
@@ -421,6 +491,9 @@ export async function GET(request: Request) {
         };
       }
       const s = statsByUser[key];
+      if (mondayUser == null) {
+        return { rcName, debug: { count: 0, ok: true } };
+      }
       try {
         const leadsUrl = `${base}/api/monday/leads?user=${encodeURIComponent(mondayUser)}&dateFrom=${encodeURIComponent(dayFrom)}&dateTo=${encodeURIComponent(dayTo)}`;
         const leadsRes = await fetch(leadsUrl, {
@@ -449,70 +522,60 @@ export async function GET(request: Request) {
 
   const reportDateStr = reportDate.toISOString().slice(0, 10);
 
-  let totalTalk = 0;
-  let totalLeads = 0;
-  let totalOnTime = 0;
-  let totalLate = 0;
-  let totalConnected = 0;
-  let totalMissed = 0;
-  let totalRejected = 0;
   const statsList: UserStats[] = [];
-
   for (const { rcName } of HR_RECRUITERS) {
     const userEntry = users.find((u) => u.name === rcName);
     const key = userEntry ? normalizeExt(userEntry.id) : rcName;
     const s = statsByUser[key];
     if (!s) continue;
-    totalTalk += s.talkMinutes;
-    totalLeads += s.leadsTotal;
-    totalOnTime += s.leadsOnTime;
-    totalLate += s.leadsLate;
-    totalConnected += s.callsConnected;
-    totalMissed += s.callsMissed;
-    totalRejected += s.leadsRejected;
     statsList.push(s);
   }
 
-  const aiReport = skipAI ? null : await fetchAIReport(statsList, {
-    talk: totalTalk,
-    total: totalLeads,
-    onTime: totalOnTime,
-    late: totalLate,
-    connected: totalConnected,
-    missed: totalMissed,
-    rejected: totalRejected,
-  });
+  const bpFullStats = filterBpAdminGroup(statsList);
+  const bpTeamWideStats = filterBpTeamGroup(statsList);
+  const jmFullStats = filterJmAdminGroup(statsList);
+  const jmTeamWideStats = filterJmTeamGroup(statsList);
 
   const { start } = getShiftHours(reportDate);
   const shiftLabel = start === 9 ? '9am–6pm' : '8am–5pm';
-  const adviceByName = aiReport
-    ? Object.fromEntries(aiReport.advice.map((a) => [a.name, a.advice]))
-    : ({} as Record<string, string>);
 
-  let msg = `📊 *HR Daily Report — ${reportDateStr}*\n`;
-  msg += `Shift: ${shiftLabel} US Central (7pm–4am Tashkent)\n\n`;
+  const chatLegacy = process.env.TELEGRAM_CHAT_ID;
+  const envBpTeam = process.env.TELEGRAM_BP_TEAM_CHAT_ID;
+  const envBpAdmin = process.env.TELEGRAM_BP_ADMIN_CHAT_ID;
+  const envJmTeam = process.env.TELEGRAM_JM_TEAM_CHAT_ID;
+  const envJmAdmin = process.env.TELEGRAM_JM_ADMIN_CHAT_ID;
 
-  for (const s of statsList) {
-    msg += `👤 *${s.name}*\n`;
-    msg += `   Talk: ${s.talkMinutes} min | Leads: ${s.leadsTotal} total (${s.leadsOnTime} on-time, ${s.leadsLate} late) | Calls: ${s.callsConnected} connected, ${s.callsMissed} missed | Rejected: ${s.leadsRejected}\n`;
-    const adv = adviceByName[s.name];
-    if (adv) msg += `\n   💡 *Advice:* ${adv}\n`;
-    msg += `\n`;
-  }
+  const buildTeamAiAndMessage = async (team: UserStats[], label: string) => {
+    const totals = aggregateTotals(team);
+    const ai = skipAI ? null : await fetchAIReport(team, totals);
+    const text = buildReportMessage(team, ai, reportDateStr, shiftLabel, label);
+    return { ai, text };
+  };
 
-  if (aiReport) {
-    msg += `📋 *Daily Outcome*\n${aiReport.dailyOutcome}\n\n`;
-  }
+  type SendItem = { key: string; chatId: string; stats: UserStats[]; label: string };
 
-  msg += `📈 *TOTAL (${statsList.length} users)*\n`;
-  msg += `   Talk: ${totalTalk} min | Leads: ${totalLeads} total (${totalOnTime} on-time, ${totalLate} late) | Calls: ${totalConnected} connected, ${totalMissed} missed | Rejected: ${totalRejected}`;
-
-  const TELEGRAM_MAX_LENGTH = 4096;
-  if (msg.length > TELEGRAM_MAX_LENGTH) {
-    msg = msg.slice(0, TELEGRAM_MAX_LENGTH - 20) + '\n\n...[truncated]';
+  async function runSends(items: SendItem[]): Promise<{ key: string; ok: boolean; error?: string; skipped?: boolean }[]> {
+    const out: { key: string; ok: boolean; error?: string; skipped?: boolean }[] = [];
+    for (const it of items) {
+      if (!it.stats.length) {
+        out.push({ key: it.key, ok: true, skipped: true });
+        continue;
+      }
+      const { text } = await buildTeamAiAndMessage(it.stats, it.label);
+      const sent = await sendTelegramMessage(telegramBotToken, it.chatId, text);
+      out.push({ key: it.key, ok: sent.ok, error: sent.error });
+    }
+    return out;
   }
 
   if (debug) {
+    const combinedTotals = aggregateTotals(statsList);
+    const aiAll = skipAI ? null : await fetchAIReport(statsList, combinedTotals);
+    const msgAll = buildReportMessage(statsList, aiAll, reportDateStr, shiftLabel, 'All companies');
+    const { text: msgBpTeam } = await buildTeamAiAndMessage(bpTeamWideStats, 'BP (team)');
+    const { text: msgBpAdmin } = await buildTeamAiAndMessage(bpFullStats, 'BP (admin)');
+    const { text: msgJmTeam } = await buildTeamAiAndMessage(jmTeamWideStats, 'JM (team)');
+    const { text: msgJmAdmin } = await buildTeamAiAndMessage(jmFullStats, 'JM (admin)');
     return NextResponse.json({
       debug: true,
       hint: 'Add ?date=YYYY-MM-DD for a specific day. Add ?skipAI=1 to skip AI (faster, avoids timeout).',
@@ -543,26 +606,118 @@ export async function GET(request: Request) {
         hasRc1: !!(rc1ClientId && rc1ClientSecret && rc1Jwt),
         hasPostgres: !!process.env.POSTGRES_URL,
         hasMonday: !!process.env.MONDAY_API_TOKEN,
+        telegram: {
+          TELEGRAM_BP_TEAM_CHAT_ID: !!envBpTeam,
+          TELEGRAM_BP_ADMIN_CHAT_ID: !!envBpAdmin,
+          TELEGRAM_JM_TEAM_CHAT_ID: !!envJmTeam,
+          TELEGRAM_JM_ADMIN_CHAT_ID: !!envJmAdmin,
+          TELEGRAM_CHAT_ID: !!chatLegacy,
+        },
       },
-      message: msg,
+      message: msgAll,
+      messageBpTeam: msgBpTeam,
+      messageBpAdmin: msgBpAdmin,
+      messageJmTeam: msgJmTeam,
+      messageJmAdmin: msgJmAdmin,
     });
   }
 
-  const sendRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: msg,
-      parse_mode: 'Markdown',
-    }),
-  });
-
-  if (!sendRes.ok) {
-    const err = await sendRes.text();
-    console.error('[telegram/daily-report] Send failed:', err);
-    return NextResponse.json({ error: 'Telegram send failed', details: err }, { status: 500 });
+  /** BP-only deploy: team (no Fred) + admin (full BP). Fallback: TELEGRAM_CHAT_ID → one admin report. */
+  if (deploy === 'account1') {
+    const hasSplit = !!(envBpTeam || envBpAdmin);
+    if (!hasSplit && !chatLegacy) {
+      return NextResponse.json(
+        {
+          error:
+            'Set TELEGRAM_BP_TEAM_CHAT_ID and/or TELEGRAM_BP_ADMIN_CHAT_ID, or TELEGRAM_CHAT_ID for a single BP admin report',
+        },
+        { status: 500 }
+      );
+    }
+    if (!hasSplit && chatLegacy) {
+      const results = await runSends([{ key: 'bp_legacy', chatId: chatLegacy, stats: bpFullStats, label: 'BP (admin)' }]);
+      if (!results[0].ok) {
+        return NextResponse.json({ error: 'Telegram send failed', details: results[0].error }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true, sent: true, destinations: ['bp_legacy'] });
+    }
+    const items: SendItem[] = [];
+    if (envBpTeam) items.push({ key: 'bp_team', chatId: envBpTeam, stats: bpTeamWideStats, label: 'BP (team)' });
+    if (envBpAdmin) items.push({ key: 'bp_admin', chatId: envBpAdmin, stats: bpFullStats, label: 'BP (admin)' });
+    const results = await runSends(items);
+    const failed = results.filter((r) => !r.ok && !r.skipped);
+    if (failed.length > 0) {
+      return NextResponse.json({ error: 'Telegram send failed', results }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, sent: true, destinations: items.map((i) => i.key) });
   }
 
-  return NextResponse.json({ ok: true, sent: true });
+  /** JM-only deploy: team (no Alex) + admin (full JM). Fallback: TELEGRAM_CHAT_ID → one admin report. */
+  if (deploy === 'account2') {
+    const hasSplit = !!(envJmTeam || envJmAdmin);
+    if (!hasSplit && !chatLegacy) {
+      return NextResponse.json(
+        {
+          error:
+            'Set TELEGRAM_JM_TEAM_CHAT_ID and/or TELEGRAM_JM_ADMIN_CHAT_ID, or TELEGRAM_CHAT_ID for a single JM admin report',
+        },
+        { status: 500 }
+      );
+    }
+    if (!hasSplit && chatLegacy) {
+      const results = await runSends([{ key: 'jm_legacy', chatId: chatLegacy, stats: jmFullStats, label: 'JM (admin)' }]);
+      if (!results[0].ok) {
+        return NextResponse.json({ error: 'Telegram send failed', details: results[0].error }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true, sent: true, destinations: ['jm_legacy'] });
+    }
+    const items: SendItem[] = [];
+    if (envJmTeam) items.push({ key: 'jm_team', chatId: envJmTeam, stats: jmTeamWideStats, label: 'JM (team)' });
+    if (envJmAdmin) items.push({ key: 'jm_admin', chatId: envJmAdmin, stats: jmFullStats, label: 'JM (admin)' });
+    const results = await runSends(items);
+    const failed = results.filter((r) => !r.ok && !r.skipped);
+    if (failed.length > 0) {
+      return NextResponse.json({ error: 'Telegram send failed', results }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, sent: true, destinations: items.map((i) => i.key) });
+  }
+
+  /** Legacy (both companies): up to four sends. If none of the four env vars set, fall back to TELEGRAM_CHAT_ID combined. */
+  const hasFourWay = !!(envBpTeam || envBpAdmin || envJmTeam || envJmAdmin);
+  if (hasFourWay) {
+    const items: SendItem[] = [];
+    if (envBpTeam) items.push({ key: 'bp_team', chatId: envBpTeam, stats: bpTeamWideStats, label: 'BP (team)' });
+    if (envBpAdmin) items.push({ key: 'bp_admin', chatId: envBpAdmin, stats: bpFullStats, label: 'BP (admin)' });
+    if (envJmTeam) items.push({ key: 'jm_team', chatId: envJmTeam, stats: jmTeamWideStats, label: 'JM (team)' });
+    if (envJmAdmin) items.push({ key: 'jm_admin', chatId: envJmAdmin, stats: jmFullStats, label: 'JM (admin)' });
+    if (items.length === 0) {
+      return NextResponse.json({ error: 'No Telegram chat IDs configured' }, { status: 500 });
+    }
+    const results = await runSends(items);
+    const failed = results.filter((r) => !r.ok && !r.skipped);
+    if (failed.length > 0) {
+      return NextResponse.json({ error: 'Telegram send failed for one or more groups', results }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, sent: true, destinations: items.map((i) => i.key) });
+  }
+
+  if (chatLegacy) {
+    const combinedTotals = aggregateTotals(statsList);
+    const aiAll = skipAI ? null : await fetchAIReport(statsList, combinedTotals);
+    const msgAll = buildReportMessage(statsList, aiAll, reportDateStr, shiftLabel, 'All companies');
+    const sent = await sendTelegramMessage(telegramBotToken, chatLegacy, msgAll);
+    if (!sent.ok) {
+      console.error('[telegram/daily-report] Send failed:', sent.error);
+      return NextResponse.json({ error: 'Telegram send failed', details: sent.error }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, sent: true, destination: 'legacy_combined' });
+  }
+
+  return NextResponse.json(
+    {
+      error:
+        'Set TELEGRAM_BP_TEAM_CHAT_ID, TELEGRAM_BP_ADMIN_CHAT_ID, TELEGRAM_JM_TEAM_CHAT_ID, TELEGRAM_JM_ADMIN_CHAT_ID (any subset), or TELEGRAM_CHAT_ID for one combined report',
+    },
+    { status: 500 }
+  );
 }

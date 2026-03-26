@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Standalone daily report script for GitHub Actions.
- * Same logic as /api/telegram/daily-report. Fetches RC calls, Monday leads (via Vercel API), OpenAI, sends to Telegram.
- * No Vercel timeout - runs in GitHub Actions (up to 6 hours on free tier).
+ * Legacy standalone script (logic drifted from the app).
+ * Prefer: GitHub Action in `.github/workflows/daily-report.yml` → HTTP GET to deployed `/api/telegram/daily-report`.
+ * Use this file only if you must run the report without hitting your Next.js deployment.
  */
 
 const RC_TOKEN_URL = 'https://platform.ringcentral.com/restapi/oauth/token';
