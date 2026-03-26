@@ -41,9 +41,30 @@ jobs:
             if [ -z "$QUERY" ]; then QUERY="?skipAI=1"; else QUERY="${QUERY}&skipAI=1"; fi
           fi
 
+          # Secrets pasted into GitHub often end with a newline — that breaks curl with "Malformed URL"
+          normalize_base() {
+            local raw="$1"
+            local u
+            u=$(printf '%s' "$raw" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            if [ -z "$u" ]; then
+              echo ""
+              return
+            fi
+            case "$u" in
+              http://*|https://*) echo "$u" ;;
+              *) echo "https://${u}" ;;
+            esac
+          }
+
           call_api() {
-            local BASE="$1"
+            local RAW="$1"
             local NAME="$2"
+            local BASE
+            BASE=$(normalize_base "$RAW")
+            if [ -z "$BASE" ]; then
+              echo "ERROR: ${NAME} URL is empty after trimming. Fix GitHub secret (no extra lines)."
+              exit 1
+            fi
             local URL="${BASE%/}/api/telegram/daily-report${QUERY}"
             echo "=== ${NAME}: GET ${URL} ==="
             if [ -n "$CRON_SECRET" ]; then
