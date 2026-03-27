@@ -127,6 +127,8 @@ function pieOptionsWithPercentLabels(): ChartOptions<'pie'> {
               return {
                 text: `${String(label)}  ${pct}%`,
                 fillStyle: fill,
+                /** Required when overriding generateLabels — legend ignores labels.color otherwise */
+                fontColor: '#ffffff',
                 strokeStyle: 'rgba(0,0,0,0.35)',
                 lineWidth: 1,
                 hidden: false,
@@ -534,7 +536,7 @@ export default function MainDashboard({ mondayUsers }: { mondayUsers: readonly s
               <Pie data={pieFirst} options={pieOpts} />
             </Box>
           ) : (
-            <Box sx={{ py: 10, textAlign: 'center', color: 'white' }}>No data in range</Box>
+            <Box sx={{ py: 10, textAlign: 'center', color: '#ffffff' }}>No data in range</Box>
           )}
         </Paper>
 
@@ -545,7 +547,7 @@ export default function MainDashboard({ mondayUsers }: { mondayUsers: readonly s
               <Pie data={pieSecond} options={pieOpts} />
             </Box>
           ) : (
-            <Box sx={{ py: 10, textAlign: 'center', color: 'white' }}>No data in range</Box>
+            <Box sx={{ py: 10, textAlign: 'center', color: '#ffffff' }}>No data in range</Box>
           )}
         </Paper>
       </Box>
