@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getShiftWindowISO, getReportDayRangeISO, getShiftHours, getReportCallsRangeTashkentISO } from '@/utils/leadShift';
+import { getShiftWindowISO, getReportDayRangeISO, getShiftHours } from '@/utils/leadShift';
 
 /** Room for RC + Monday + multiple OpenAI calls (team + admin per deploy). */
 export const maxDuration = 120;
@@ -385,8 +385,10 @@ export async function GET(request: Request) {
       reportDate = new Date(Date.UTC(y, m, d));
     }
   }
+  /** One business shift in US Central (9am–6pm CDT / 8am–5pm CST). Must match RC stats — do not use the wide Tashkent calendar span here or missed/connected counts include neighboring days. */
   const { from: shiftFrom, to: shiftTo } = getShiftWindowISO(reportDate);
-  const { from: callsFrom, to: callsTo } = getReportCallsRangeTashkentISO(reportDate);
+  const callsFrom = shiftFrom;
+  const callsTo = shiftTo;
   const { from: dayFrom, to: dayTo } = getReportDayRangeISO(reportDate);
 
   const rc1ClientId = process.env.RC_CLIENT_ID || process.env.NEXT_PUBLIC_RC_CLIENT_ID;
@@ -426,7 +428,7 @@ export async function GET(request: Request) {
     users.push(...acc2Users);
   }
 
-  // Fetch calls directly from RingCentral (no DB dependency) - same as dashboard's Waiting view
+  // Fetch calls from RingCentral for the shift window only (same instant bounds as shiftWindow)
   // Deduplicate by sessionId (RC returns multiple legs per call) - match dashboard behavior
   const callRecordsByExt: Record<string, Map<string, any>> = {};
   const callsFromDate = new Date(callsFrom);
@@ -663,7 +665,7 @@ export async function GET(request: Request) {
       hint: 'Add ?date=YYYY-MM-DD for a specific day. Add ?skipAI=1 to skip AI (faster, avoids timeout).',
       reportDate: reportDateStr,
       shiftWindow: { from: shiftFrom, to: shiftTo },
-      callsRange: { from: callsFrom, to: callsTo },
+      callsRange: { from: shiftFrom, to: shiftTo },
       leadDayRange: { from: dayFrom, to: dayTo },
       users: {
         account1: acc1Count,

@@ -168,9 +168,9 @@ export function getLeadTiming(
 }
 
 /**
- * Get calls range that matches dashboard "March 18–19" (Tashkent UTC+5).
- * Shift 7pm Mar 18 – 4am Mar 19 Tashkent spans two calendar days.
- * Dashboard selects Mar 18–19 → Mar 18 00:00 to Mar 19 23:59 Tashkent = Mar 17 19:00 to Mar 19 18:59 UTC.
+ * Wide UTC span (~48h) that overlaps a Tashkent “report day” when comparing to calendar pickers.
+ * Do **not** use for Telegram shift call totals — those must use {@link getShiftWindowISO} only,
+ * or connected/missed counts include calls outside 9am–6pm (or 8am–5pm) Central.
  */
 export function getReportCallsRangeTashkentISO(reportDate: Date): { from: string; to: string } {
   const y = reportDate.getUTCFullYear();

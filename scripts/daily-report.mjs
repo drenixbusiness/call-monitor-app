@@ -63,16 +63,6 @@ function getReportDayRangeISO(reportDate) {
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
-/** Matches dashboard "March 18–19" (Tashkent UTC+5): Mar 18 00:00 to Mar 19 23:59 Tashkent = Mar 17 19:00 to Mar 19 18:59 UTC */
-function getReportCallsRangeTashkentISO(reportDate) {
-  const y = reportDate.getUTCFullYear();
-  const m = reportDate.getUTCMonth();
-  const d = reportDate.getUTCDate();
-  const from = new Date(Date.UTC(y, m, d - 1, 19, 0, 0, 0));
-  const to = new Date(Date.UTC(y, m, d + 1, 18, 59, 59, 999));
-  return { from: from.toISOString(), to: to.toISOString() };
-}
-
 async function getAccount1Token(clientId, clientSecret, jwt) {
   const encodedAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
   const params = new URLSearchParams();
@@ -214,7 +204,7 @@ async function main() {
     }
   }
 
-  const { from: callsFrom, to: callsTo } = getReportCallsRangeTashkentISO(reportDate);
+  const { from: callsFrom, to: callsTo } = getShiftWindowISO(reportDate);
   const { from: dayFrom, to: dayTo } = getReportDayRangeISO(reportDate);
   const callsFromDate = new Date(callsFrom);
   const callsToDate = new Date(callsTo);
