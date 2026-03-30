@@ -3,7 +3,7 @@ import { getServerDeployAccount } from '@/lib/deployAccount';
 import { getMondayUsersForDeploy } from '@/lib/whitelist';
 import { USER_BOARD_MAP, resolveCountingOwner, ownerMatchesUser } from '@/lib/mondayBoards';
 import { getThisMonthRange } from '@/lib/mondayDateRange';
-import { fetchWorkspaceLeads, type MondayLead } from '@/lib/mondayWorkspaceLeads';
+import { fetchWorkspaceLeads, type MondayLead, type ParsedWorkspaceLead } from '@/lib/mondayWorkspaceLeads';
 import { leadMatchesDeployCompany } from '@/lib/mondayCompanyFilter';
 
 const STATUS_KEYS = ['N/A', 'Processing', 'Not valid lead', 'Follow up', 'Not touched', 'Rejected', 'Other'] as const;
@@ -33,6 +33,53 @@ function buildLineSeries(dayKeys: string[], byDay: Record<string, Record<string,
     status,
     data: dayKeys.map((d) => byDay[d]?.[status] ?? 0),
   }));
+}
+
+type MainDashStats = {
+  totalLeads: number;
+  statusCounts: Record<string, number>;
+  statusFirstCounts: Record<string, number>;
+  statusSecondCounts: Record<string, number>;
+  trendByDay: {
+    labels: string[];
+    firstTouchSeries: { status: string; data: number[] }[];
+    secondTouchSeries: { status: string; data: number[] }[];
+  };
+};
+
+function aggregateLeadRows(filtered: ParsedWorkspaceLead[]): MainDashStats {
+  const statusCounts = emptyCounts();
+  const statusFirstCounts = emptyCounts();
+  const statusSecondCounts = emptyCounts();
+  const byDayFirst: Record<string, Record<string, number>> = {};
+  const byDaySecond: Record<string, Record<string, number>> = {};
+
+  for (const row of filtered) {
+    bump(statusCounts, row.lead.status);
+    bump(statusFirstCounts, row.statusFirst);
+    bump(statusSecondCounts, row.statusSecond);
+
+    const dk = leadDayKey(row.lead);
+    if (dk) {
+      if (!byDayFirst[dk]) byDayFirst[dk] = emptyCounts();
+      if (!byDaySecond[dk]) byDaySecond[dk] = emptyCounts();
+      bump(byDayFirst[dk], row.statusFirst);
+      bump(byDaySecond[dk], row.statusSecond);
+    }
+  }
+
+  const dayKeys = [...new Set([...Object.keys(byDayFirst), ...Object.keys(byDaySecond)])].sort();
+  return {
+    totalLeads: filtered.length,
+    statusCounts,
+    statusFirstCounts,
+    statusSecondCounts,
+    trendByDay: {
+      labels: dayKeys,
+      firstTouchSeries: buildLineSeries(dayKeys, byDayFirst),
+      secondTouchSeries: buildLineSeries(dayKeys, byDaySecond),
+    },
+  };
 }
 
 function leadDayKey(lead: MondayLead): string | null {
@@ -105,48 +152,46 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'This user is not available on this deployment' }, { status: 403 });
     }
 
-    const filtered = rows.filter((row) => {
-      if (!leadMatchesDeployCompany(row.lead.company, deploy)) return false;
-      if (userFilter === 'all' || !userFilter) return true;
-      const co = resolveCountingOwner(row, userFilter);
-      return ownerMatchesUser(co, userFilter);
-    });
+    const companyFiltered = rows.filter((row) => leadMatchesDeployCompany(row.lead.company, deploy));
 
-    const statusCounts = emptyCounts();
-    const statusFirstCounts = emptyCounts();
-    const statusSecondCounts = emptyCounts();
+    const filtered =
+      userFilter === 'all' || !userFilter
+        ? companyFiltered
+        : companyFiltered.filter((row) => {
+            const co = resolveCountingOwner(row, userFilter);
+            return ownerMatchesUser(co, userFilter);
+          });
 
-    const byDayFirst: Record<string, Record<string, number>> = {};
-    const byDaySecond: Record<string, Record<string, number>> = {};
+    const stats = aggregateLeadRows(filtered);
+    const rangePayload = { from: filterFrom.toISOString(), to: filterTo.toISOString() };
 
-    for (const row of filtered) {
-      bump(statusCounts, row.lead.status);
-      bump(statusFirstCounts, row.statusFirst);
-      bump(statusSecondCounts, row.statusSecond);
-
-      const dk = leadDayKey(row.lead);
-      if (dk) {
-        if (!byDayFirst[dk]) byDayFirst[dk] = emptyCounts();
-        if (!byDaySecond[dk]) byDaySecond[dk] = emptyCounts();
-        bump(byDayFirst[dk], row.statusFirst);
-        bump(byDaySecond[dk], row.statusSecond);
+    if (userFilter === 'all' || !userFilter) {
+      const perUser: Record<string, { user: string; range: typeof rangePayload } & MainDashStats> = {};
+      for (const u of allowedMonday) {
+        const userRows = companyFiltered.filter((row) => {
+          const co = resolveCountingOwner(row, u);
+          return ownerMatchesUser(co, u);
+        });
+        const s = aggregateLeadRows(userRows);
+        perUser[u] = {
+          user: u,
+          range: rangePayload,
+          ...s,
+        };
       }
+
+      return NextResponse.json({
+        user: 'all',
+        range: rangePayload,
+        ...stats,
+        perUser,
+      });
     }
 
-    const dayKeys = [...new Set([...Object.keys(byDayFirst), ...Object.keys(byDaySecond)])].sort();
-
     return NextResponse.json({
-      user: userFilter === 'all' || !userFilter ? 'all' : userFilter,
-      range: { from: filterFrom.toISOString(), to: filterTo.toISOString() },
-      totalLeads: filtered.length,
-      statusCounts,
-      statusFirstCounts,
-      statusSecondCounts,
-      trendByDay: {
-        labels: dayKeys,
-        firstTouchSeries: buildLineSeries(dayKeys, byDayFirst),
-        secondTouchSeries: buildLineSeries(dayKeys, byDaySecond),
-      },
+      user: userFilter,
+      range: rangePayload,
+      ...stats,
     });
   } catch (err: unknown) {
     console.error('[monday/main-dashboard] Error:', err);

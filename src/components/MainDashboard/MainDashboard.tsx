@@ -50,7 +50,7 @@ function statusColor(s: string): string {
 
 type Counts = Record<string, number>;
 
-type MainDashResponse = {
+type MainDashPayloadCore = {
   user: string;
   range: { from: string; to: string };
   totalLeads: number;
@@ -62,6 +62,11 @@ type MainDashResponse = {
     firstTouchSeries: { status: string; data: number[] }[];
     secondTouchSeries: { status: string; data: number[] }[];
   };
+};
+
+/** Full API response for `user=all` includes per-recruiter slices (one Monday fetch). */
+type MainDashBundle = MainDashPayloadCore & {
+  perUser?: Record<string, MainDashPayloadCore>;
 };
 
 const widgetSx = {
@@ -267,33 +272,75 @@ const pieOpts = pieOptionsWithPercentLabels();
 
 export default function MainDashboard({ mondayUsers }: { mondayUsers: readonly string[] }) {
   const [userFilter, setUserFilter] = useState<string>('all');
-  const [data, setData] = useState<MainDashResponse | null>(null);
+  const [bundle, setBundle] = useState<MainDashBundle | null>(null);
+  const [legacySlice, setLegacySlice] = useState<MainDashPayloadCore | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const deploy = getClientDeployAccount();
   const companyLabel = deploy === 'account1' ? 'BP' : deploy === 'account2' ? 'JM / JDM' : 'All companies';
 
-  const load = useCallback(async () => {
+  /** One Monday workspace fetch returns aggregates for all + each recruiter. */
+  const loadAll = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setLegacySlice(null);
     try {
-      const q = userFilter === 'all' ? 'all' : encodeURIComponent(userFilter);
-      const res = await fetch(`/api/monday/main-dashboard?user=${q}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to load');
-      setData(json);
+      const res = await fetch('/api/monday/main-dashboard?user=all');
+      const json: MainDashBundle = await res.json();
+      if (!res.ok) throw new Error((json as { error?: string }).error || 'Failed to load');
+      setBundle(json);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
-      setData(null);
+      setBundle(null);
     } finally {
       setLoading(false);
     }
-  }, [userFilter]);
+  }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadAll();
+  }, [loadAll]);
+
+  const data = useMemo((): MainDashPayloadCore | null => {
+    const legacyOk = legacySlice?.user === userFilter ? legacySlice : null;
+    if (!bundle) return legacyOk;
+    if (userFilter === 'all') {
+      const { perUser: _p, ...agg } = bundle;
+      return agg;
+    }
+    const slice = bundle.perUser?.[userFilter];
+    if (slice) return slice;
+    return legacyOk;
+  }, [bundle, userFilter, legacySlice]);
+
+  /** Older API responses without `perUser`: fetch the selected recruiter once. */
+  useEffect(() => {
+    if (!bundle || userFilter === 'all' || bundle.perUser?.[userFilter]) return;
+
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/monday/main-dashboard?user=${encodeURIComponent(userFilter)}`);
+        const json: MainDashPayloadCore = await res.json();
+        if (!res.ok) throw new Error((json as { error?: string }).error || 'Failed to load');
+        if (!cancelled) setLegacySlice(json);
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : 'Failed to load');
+          setLegacySlice(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bundle, userFilter]);
 
   const pieFirst = useMemo(() => (data ? countsToPieData(data.statusFirstCounts) : null), [data]);
   const pieSecond = useMemo(() => (data ? countsToPieData(data.statusSecondCounts) : null), [data]);
@@ -323,7 +370,7 @@ export default function MainDashboard({ mondayUsers }: { mondayUsers: readonly s
     );
   }
 
-  if (error && !data) {
+  if (error && !bundle && !data) {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="error" onClose={() => setError(null)}>
@@ -428,10 +475,10 @@ export default function MainDashboard({ mondayUsers }: { mondayUsers: readonly s
             }}
           />
         )}
-        {loading && data && (
+        {loading && !data && userFilter !== 'all' && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 'auto' }}>
             <CircularProgress size={18} sx={{ color: 'var(--accent)' }} />
-            <Typography sx={{ color: '#fff', fontSize: '0.8rem' }}>Refreshing…</Typography>
+            <Typography sx={{ color: '#fff', fontSize: '0.8rem' }}>Loading recruiter…</Typography>
           </Box>
         )}
       </Paper>
