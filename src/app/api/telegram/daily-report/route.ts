@@ -14,6 +14,13 @@ import {
   filterJmTeamGroup,
 } from '@/lib/telegramReport';
 
+/**
+ * Team = worker Telegram groups (TELEGRAM_*_TEAM_CHAT_ID). Managers = head/admin groups
+ * (TELEGRAM_*_HEAD_CHAT_ID / *_ADMIN_CHAT_ID).
+ * Set to true to also post the team-scoped report to team chats; currently managers only.
+ */
+const SEND_DAILY_REPORT_TO_TEAM_TELEGRAM_GROUPS = false;
+
 type UserStats = {
   name: string;
   talkMinutes: number;
@@ -728,8 +735,19 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: true, sent: true, destinations: ['bp_legacy'] });
     }
     const items: SendItem[] = [];
-    if (envBpTeam) items.push({ key: 'bp_team', chatId: envBpTeam, stats: bpTeamWideStats, label: 'BP (team)' });
+    if (SEND_DAILY_REPORT_TO_TEAM_TELEGRAM_GROUPS && envBpTeam) {
+      items.push({ key: 'bp_team', chatId: envBpTeam, stats: bpTeamWideStats, label: 'BP (team)' });
+    }
     if (envBpAdmin) items.push({ key: 'bp_admin', chatId: envBpAdmin, stats: bpFullStats, label: 'BP (admin)' });
+    if (items.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            'No manager Telegram chat configured, or only team chat is set while team sends are disabled. Set TELEGRAM_BP_HEAD_CHAT_ID (managers).',
+        },
+        { status: 500 }
+      );
+    }
     const results = await runSends(items);
     const failed = results.filter((r) => !r.ok && !r.skipped);
     if (failed.length > 0) {
@@ -758,8 +776,19 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: true, sent: true, destinations: ['jm_legacy'] });
     }
     const items: SendItem[] = [];
-    if (envJmTeam) items.push({ key: 'jm_team', chatId: envJmTeam, stats: jmTeamWideStats, label: 'JM (team)' });
+    if (SEND_DAILY_REPORT_TO_TEAM_TELEGRAM_GROUPS && envJmTeam) {
+      items.push({ key: 'jm_team', chatId: envJmTeam, stats: jmTeamWideStats, label: 'JM (team)' });
+    }
     if (envJmAdmin) items.push({ key: 'jm_admin', chatId: envJmAdmin, stats: jmFullStats, label: 'JM (admin)' });
+    if (items.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            'No manager Telegram chat configured, or only team chat is set while team sends are disabled. Set TELEGRAM_JM_HEAD_CHAT_ID (managers).',
+        },
+        { status: 500 }
+      );
+    }
     const results = await runSends(items);
     const failed = results.filter((r) => !r.ok && !r.skipped);
     if (failed.length > 0) {
@@ -772,12 +801,22 @@ export async function GET(request: Request) {
   const hasFourWay = !!(envBpTeam || envBpAdmin || envJmTeam || envJmAdmin);
   if (hasFourWay) {
     const items: SendItem[] = [];
-    if (envBpTeam) items.push({ key: 'bp_team', chatId: envBpTeam, stats: bpTeamWideStats, label: 'BP (team)' });
+    if (SEND_DAILY_REPORT_TO_TEAM_TELEGRAM_GROUPS && envBpTeam) {
+      items.push({ key: 'bp_team', chatId: envBpTeam, stats: bpTeamWideStats, label: 'BP (team)' });
+    }
     if (envBpAdmin) items.push({ key: 'bp_admin', chatId: envBpAdmin, stats: bpFullStats, label: 'BP (admin)' });
-    if (envJmTeam) items.push({ key: 'jm_team', chatId: envJmTeam, stats: jmTeamWideStats, label: 'JM (team)' });
+    if (SEND_DAILY_REPORT_TO_TEAM_TELEGRAM_GROUPS && envJmTeam) {
+      items.push({ key: 'jm_team', chatId: envJmTeam, stats: jmTeamWideStats, label: 'JM (team)' });
+    }
     if (envJmAdmin) items.push({ key: 'jm_admin', chatId: envJmAdmin, stats: jmFullStats, label: 'JM (admin)' });
     if (items.length === 0) {
-      return NextResponse.json({ error: 'No Telegram chat IDs configured' }, { status: 500 });
+      return NextResponse.json(
+        {
+          error:
+            'No manager Telegram chats configured (TELEGRAM_BP_HEAD_CHAT_ID / TELEGRAM_JM_HEAD_CHAT_ID), or only team chats are set while team sends are disabled.',
+        },
+        { status: 500 }
+      );
     }
     const results = await runSends(items);
     const failed = results.filter((r) => !r.ok && !r.skipped);
@@ -802,7 +841,7 @@ export async function GET(request: Request) {
   return NextResponse.json(
     {
       error:
-        'Set TELEGRAM_BP_TEAM_CHAT_ID, TELEGRAM_BP_ADMIN_CHAT_ID, TELEGRAM_JM_TEAM_CHAT_ID, TELEGRAM_JM_ADMIN_CHAT_ID (any subset), or TELEGRAM_CHAT_ID for one combined report',
+        'Set manager chats TELEGRAM_BP_HEAD_CHAT_ID and/or TELEGRAM_JM_HEAD_CHAT_ID (or TELEGRAM_CHAT_ID for one combined report). Team group sends are disabled in code (SEND_DAILY_REPORT_TO_TEAM_TELEGRAM_GROUPS).',
     },
     { status: 500 }
   );
