@@ -8,7 +8,7 @@
 const SLA_MINUTES = 10;
 
 /** US Central DST: 2nd Sunday March – 1st Sunday November. Returns offset in hours (e.g. -5 for CDT, -6 for CST). */
-function getCentralOffsetHours(year: number, month: number, day: number): number {
+export function getCentralOffsetHours(year: number, month: number, day: number): number {
   const getFirstSunday = (y: number, m: number) => {
     const first = new Date(Date.UTC(y, m, 1));
     const firstDow = first.getUTCDay();

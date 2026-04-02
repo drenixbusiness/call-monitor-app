@@ -54,6 +54,19 @@ function getColumnValue(col: { column?: { title?: string }; text?: string; value
   return '';
 }
 
+/** Some boards (e.g. Ethan, Winston) name columns `Status'` / `Status 2'` instead of `Status` / `Status 2`. */
+function normalizeColumnTitleForMatch(raw: string): string {
+  return raw.trim().replace(/[''`´\u2019\u2018]+$/u, '');
+}
+
+function isPrimaryStatusTitle(raw: string): boolean {
+  return normalizeColumnTitleForMatch(raw).toLowerCase() === 'status';
+}
+
+function isStatus2Title(raw: string): boolean {
+  return normalizeColumnTitleForMatch(raw).toLowerCase() === 'status 2';
+}
+
 function normalizeStatus(raw: string): string {
   const s = (raw || '').trim();
   if (!s) return 'Not touched';
@@ -162,8 +175,8 @@ function tryParseItem(
       col.type === 'people';
     if (isPersonColumn) continue;
 
-    if (rawTitle === 'Status 2' || title === 'status 2') statusFromStatus2 = val;
-    else if (rawTitle === 'Status' || title === 'status') statusFromStatus = val;
+    if (isStatus2Title(rawTitle)) statusFromStatus2 = val;
+    else if (isPrimaryStatusTitle(rawTitle)) statusFromStatus = val;
     else if (title.includes('status') && val && col.type === 'status') statusFromAny = val;
     if (title.includes('company')) company = val;
     if (title === 'date' && !title.includes('contact')) {

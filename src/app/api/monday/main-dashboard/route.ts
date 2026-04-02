@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerDeployAccount } from '@/lib/deployAccount';
 import { getMondayUsersForDeploy } from '@/lib/whitelist';
 import { USER_BOARD_MAP, resolveCountingOwner, ownerMatchesUser } from '@/lib/mondayBoards';
-import { getThisMonthRange } from '@/lib/mondayDateRange';
+import { resolveMainDashboardRange } from '@/lib/mondayDateRange';
 import { fetchWorkspaceLeads, type MondayLead, type ParsedWorkspaceLead } from '@/lib/mondayWorkspaceLeads';
 import { leadMatchesDeployCompany } from '@/lib/mondayCompanyFilter';
 
@@ -124,11 +124,16 @@ export async function GET(request: Request) {
     const userParamLower = rawUser.toLowerCase();
     const dateFromParam = searchParams.get('dateFrom');
     const dateToParam = searchParams.get('dateTo');
-    const useCustomRange = dateFromParam && dateToParam;
+    const presetParam = searchParams.get('preset');
 
-    const { from: monthFrom, to: monthTo } = getThisMonthRange();
-    const filterFrom = useCustomRange ? new Date(dateFromParam!) : monthFrom;
-    const filterTo = useCustomRange ? new Date(dateToParam!) : monthTo;
+    let filterFrom: Date;
+    let filterTo: Date;
+    try {
+      ({ from: filterFrom, to: filterTo } = resolveMainDashboardRange(presetParam, dateFromParam, dateToParam));
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Invalid date range';
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
 
     const mondayKeys = mondayUserKeysForDeploy();
     const allBoardNames = mondayKeys.flatMap((k) => USER_BOARD_MAP[k] || []);
