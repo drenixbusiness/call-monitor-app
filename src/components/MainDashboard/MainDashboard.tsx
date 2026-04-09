@@ -673,6 +673,12 @@ export default function MainDashboard({ mondayUsers }: { mondayUsers: readonly s
             <Typography sx={{ color: '#fff', fontSize: '0.8rem' }}>Loading recruiter…</Typography>
           </Box>
         )}
+        {loading && data && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 'auto' }}>
+            <CircularProgress size={18} sx={{ color: 'var(--accent)' }} />
+            <Typography sx={{ color: '#fff', fontSize: '0.8rem' }}>Loading data…</Typography>
+          </Box>
+        )}
       </Paper>
 
       {error && (
