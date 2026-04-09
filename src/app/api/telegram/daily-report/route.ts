@@ -19,7 +19,7 @@ import {
  * (TELEGRAM_*_HEAD_CHAT_ID / *_ADMIN_CHAT_ID).
  * Set to true to also post the team-scoped report to team chats; currently managers only.
  */
-const SEND_DAILY_REPORT_TO_TEAM_TELEGRAM_GROUPS = false;
+const SEND_DAILY_REPORT_TO_TEAM_TELEGRAM_GROUPS = true;
 
 type UserStats = {
   name: string;
