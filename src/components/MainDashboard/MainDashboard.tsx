@@ -687,32 +687,40 @@ export default function MainDashboard({ mondayUsers }: { mondayUsers: readonly s
         </Alert>
       )}
 
-      {/* Monday-style KPI block: tall total + metric grid (avoids collapsed horizontal flex strip) */}
+      {/* KPI block: fully re-laid out with distinct placement */}
       <Box
         sx={{
           display: 'grid',
           gap: 2,
           flexShrink: 0,
-          gridTemplateColumns: {
-            xs: 'repeat(2, minmax(0, 1fr))',
-            sm: 'repeat(3, minmax(0, 1fr))',
-            md: 'minmax(200px, 240px) repeat(4, minmax(0, 1fr))',
-          },
-          gridAutoRows: { xs: 'auto', md: 'minmax(104px, auto)' },
+          gridTemplateColumns: { xs: '1fr', lg: 'minmax(260px, 320px) 1fr' },
+          alignItems: 'stretch',
         }}
       >
         <Paper
           elevation={0}
           sx={{
             ...widgetSx,
-            p: 2.5,
-            minHeight: { xs: 120, md: '100%' },
-            gridColumn: { xs: 'span 2', sm: 'span 3', md: '1' },
-            gridRow: { md: '1 / 3' },
-            border: '1px solid rgba(0, 217, 245, 0.2)',
+            p: { xs: 2.25, sm: 2.5 },
+            minHeight: { xs: 168, lg: '100%' },
+            border: '1px solid rgba(0, 217, 245, 0.22)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
+            position: 'relative',
+            overflow: 'hidden',
+            gap: 1,
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              top: -40,
+              right: -40,
+              width: 160,
+              height: 160,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(0,217,245,0.22) 0%, rgba(0,217,245,0) 70%)',
+              pointerEvents: 'none',
+            },
           }}
         >
           <Typography
@@ -721,47 +729,78 @@ export default function MainDashboard({ mondayUsers }: { mondayUsers: readonly s
               color: '#fff',
               fontWeight: 700,
               letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              zIndex: 1,
             }}
           >
             TOTAL LEADS
           </Typography>
-          <Typography sx={{ fontSize: { xs: '2.25rem', md: '2.75rem' }, fontWeight: 800, color: '#fff', mt: 1, lineHeight: 1 }}>
+          <Typography
+            sx={{
+              fontSize: { xs: '2.6rem', md: '3rem' },
+              fontWeight: 800,
+              color: '#fff',
+              mt: 0.5,
+              lineHeight: 1,
+              letterSpacing: '-0.02em',
+              zIndex: 1,
+            }}
+          >
             {data?.totalLeads ?? 0}
           </Typography>
-          <Typography sx={{ fontSize: '0.9rem', color: '#fff', mt: 0.5 }}>in range</Typography>
+          <Typography sx={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.9)', zIndex: 1 }}>in range</Typography>
         </Paper>
 
-        {KPI_ORDER.map(({ key, label }) => {
-          const n = data?.statusCounts[key] ?? 0;
-          const c = statusColor(key);
-          return (
-            <Paper
-              key={key}
-              elevation={0}
-              sx={{
-                ...widgetSx,
-                p: 2,
-                minHeight: 104,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                borderLeft: `4px solid ${c}`,
-              }}
-            >
-              <Typography
+        <Box
+          sx={{
+            display: 'grid',
+            gap: 1.75,
+            gridTemplateColumns: {
+              xs: 'repeat(2, minmax(0, 1fr))',
+              sm: 'repeat(3, minmax(0, 1fr))',
+              xl: 'repeat(4, minmax(0, 1fr))',
+            },
+            gridAutoRows: 'minmax(104px, auto)',
+          }}
+        >
+          {KPI_ORDER.map(({ key, label }) => {
+            const n = data?.statusCounts[key] ?? 0;
+            const c = statusColor(key);
+            return (
+              <Paper
+                key={key}
+                elevation={0}
                 sx={{
-                  fontSize: '0.75rem',
-                  color: '#fff',
-                  fontWeight: 600,
-                  lineHeight: 1.35,
+                  ...widgetSx,
+                  p: 1.75,
+                  minHeight: 104,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  bgcolor: 'rgba(11, 15, 24, 0.88)',
                 }}
               >
-                {label}
-              </Typography>
-              <Typography sx={{ fontSize: '1.75rem', fontWeight: 700, color: '#fff', lineHeight: 1.1 }}>{n}</Typography>
-            </Paper>
-          );
-        })}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                  <Typography
+                    sx={{
+                      fontSize: '0.74rem',
+                      color: '#fff',
+                      fontWeight: 600,
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {label}
+                  </Typography>
+                  <Box sx={{ width: 10, height: 10, borderRadius: '999px', bgcolor: c, flexShrink: 0 }} />
+                </Box>
+                <Typography sx={{ fontSize: '1.9rem', fontWeight: 800, color: '#fff', lineHeight: 1.05 }}>
+                  {n}
+                </Typography>
+              </Paper>
+            );
+          })}
+        </Box>
       </Box>
 
       {/* Two pie widgets side by side (Monday layout) */}
