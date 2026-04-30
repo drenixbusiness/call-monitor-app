@@ -773,7 +773,7 @@ export default function MainDashboard({ mondayUsers }: { mondayUsers: readonly s
                 sx={{
                   ...widgetSx,
                   p: 1.75,
-                  minHeight: 104,
+                  minHeight: 144,
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
