@@ -4,13 +4,16 @@ import type { RcDeployAccount } from '@/lib/deployAccount';
 export const WHITELIST_ACCOUNT1: readonly string[] = [
   'Ethan Parker',
   'Fred Royce',
+  'HR Michael',
+  'Nick Allen',
   'Tony Safety Department',
 ];
 export const WHITELIST_ACCOUNT2: readonly string[] = [
-  'Winston Smith',
   'Alex Chester',
+  'Winston Smith',
   'Jessica Miller',
   'Isaac Taylor',
+  'Alfred Brooks',
   'Henry Safety Department',
 ];
 
