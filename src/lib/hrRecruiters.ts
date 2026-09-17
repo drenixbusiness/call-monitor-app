@@ -23,5 +23,5 @@ export const MONDAY_TO_RC_NAME: Record<string, string> = {
   'Tim': 'Tim Baker',
   'Nick': 'Nick Allen',
   'Simon': 'Simon Cooper',
-  'Sam': 'Sam Adams'
+  'Sam': 'HR Sam'
 };
