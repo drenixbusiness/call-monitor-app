@@ -34,7 +34,8 @@ export const TELEGRAM_BP_ALL_RC_NAMES = new Set([
   'Ethan Parker',
   'Tony Safety Department',
   'Nick Allen',
-  'HR Sam'
+  'HR Sam',
+  'Oliver Clark'
 ]);
 
 /** Full JM roster (admin report includes everyone here). */
@@ -61,7 +62,8 @@ export const TELEGRAM_REPORT_ROWS_ALL: readonly TelegramReportRow[] = [
   { rcName: 'Simon Cooper', mondayUser: 'Simon Cooper' },
   { rcName: 'Nick Allen', mondayUser: 'Nick' },
   { rcName: 'Tim Baker', mondayUser: 'Tim Baker' },
-  { rcName: 'HR Sam', mondayUser: 'Sam' }
+  { rcName: 'HR Sam', mondayUser: 'Sam' },
+  { rcName: 'Oliver Clark', mondayUser: 'Oliver' },
 ];
 
 /** BP team chat: workers only (exclude Head HR Fred). */

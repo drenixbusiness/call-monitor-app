@@ -11,7 +11,8 @@ export const HR_RECRUITERS = [
   'Tim',
   'Nick',
   'Simon',
-  'Sam'
+  'Sam',
+  'Oliver',
 ] as const;
 
 /** Monday API user param -> RC full name (for extension lookup) */
@@ -23,5 +24,6 @@ export const MONDAY_TO_RC_NAME: Record<string, string> = {
   'Tim': 'Tim Baker',
   'Nick': 'Nick Allen',
   'Simon': 'Simon Cooper',
-  'Sam': 'HR Sam'
+  'Sam': 'HR Sam',
+  'Oliver': 'Oliver Clark'
 };
