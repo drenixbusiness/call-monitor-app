@@ -25,7 +25,8 @@ export const HR_REPORT_RC_NAMES = new Set([
   'Simon Cooper',
   'Henry Safety Department',
   'Tim Baker',
-  'HR Sam'
+  'HR Sam',
+  'Oliver Clark'
 ]);
 
 /** Full BP roster (admin report includes everyone here). */

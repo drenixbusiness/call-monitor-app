@@ -23,7 +23,7 @@ export const MONDAY_USERS_ACCOUNT1: readonly string[] = ['Fred', 'Ethan', 'Nick'
 export const MONDAY_USERS_ACCOUNT2: readonly string[] = ['Alex Chester', 'Winston', 'Simon Cooper', 'Tim Baker'];
 
 /** Combined list (dual-mode / legacy); order kept for stable UI colors. */
-export const MONDAY_USERS_ALL: readonly string[] = ['Alex Chester', 'Fred', 'Ethan', 'Winston', 'Simon Cooper', 'Tim Baker', 'Nick', 'Sam'];
+export const MONDAY_USERS_ALL: readonly string[] = ['Alex Chester', 'Fred', 'Ethan', 'Winston', 'Simon Cooper', 'Tim Baker', 'Nick', 'Sam', 'Oliver'];
 
 export function getMondayUsersForDeploy(deploy: RcDeployAccount | null): readonly string[] {
   if (deploy === 'account1') return MONDAY_USERS_ACCOUNT1;
