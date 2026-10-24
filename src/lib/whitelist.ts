@@ -7,7 +7,8 @@ export const WHITELIST_ACCOUNT1: readonly string[] = [
   'HR Sam',
   'Nick Allen',
   'Tony Safety Department',
-  'Oliver Clark'
+  'Oliver Clark',
+  'John Brooks',
 ];
 export const WHITELIST_ACCOUNT2: readonly string[] = [
   'Alex Chester',
@@ -16,12 +17,11 @@ export const WHITELIST_ACCOUNT2: readonly string[] = [
   'Simon Cooper',
   'Tim Baker',
   'Henry Safety Department',
-  'John Brooks',
 ];
 
 /** Monday Leads sidebar names per deploy (must match USER_BOARD_MAP keys in api/monday/leads). */
-export const MONDAY_USERS_ACCOUNT1: readonly string[] = ['Fred', 'Ethan', 'Nick', 'Sam', 'Oliver'];
-export const MONDAY_USERS_ACCOUNT2: readonly string[] = ['Alex Chester', 'Winston', 'Simon Cooper', 'Tim Baker', 'John'];
+export const MONDAY_USERS_ACCOUNT1: readonly string[] = ['Fred', 'Ethan', 'Nick', 'Sam', 'Oliver', 'John'];
+export const MONDAY_USERS_ACCOUNT2: readonly string[] = ['Alex Chester', 'Winston', 'Simon Cooper', 'Tim Baker'];
 
 /** Combined list (dual-mode / legacy); order kept for stable UI colors. */
 export const MONDAY_USERS_ALL: readonly string[] = ['Alex Chester', 'Fred', 'Ethan', 'Winston', 'Simon Cooper', 'Tim Baker', 'Nick', 'Sam', 'Oliver', 'John'];
