@@ -1,6 +1,7 @@
 /** Monday board names per recruiter (must match Monday workspace). */
 export const USER_BOARD_MAP: Record<string, string[]> = {
   Fred: ['New leads Fred', 'Follow up Fred'],
+  Carla: ['New leads Carla', 'Follow up Carla'],
   'Alex Chester': ['New leads Alex', 'Follow up Alex'],
   Ethan: ['New leads Ethan', 'Follow up Ethan'],
   Winston: ['New leads Winston', 'Follow up Winston'],
@@ -12,7 +13,7 @@ export const USER_BOARD_MAP: Record<string, string[]> = {
   John: ['New leads John', 'Follow up John'],
 };
 
-export const MONDAY_USERS = ['Alex Chester', 'Fred', 'Ethan', 'Winston', 'Simon Cooper', 'Tim Baker', 'Nick', 'Sam', 'Oliver', 'John'] as const;
+export const MONDAY_USERS = ['Alex Chester', 'Fred', 'Carla', 'Ethan', 'Winston', 'Simon Cooper', 'Tim Baker', 'Nick', 'Sam', 'Oliver', 'John'] as const;
 
 export const BOARD_TO_USER: Record<string, string> = {};
 for (const [user, boards] of Object.entries(USER_BOARD_MAP)) {

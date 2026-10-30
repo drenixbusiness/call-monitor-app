@@ -4,6 +4,7 @@ import type { RcDeployAccount } from '@/lib/deployAccount';
 export const WHITELIST_ACCOUNT1: readonly string[] = [
   'Ethan Parker',
   'Fred Royce',
+  'Carla Connor',
   'HR Sam',
   'Nick Allen',
   'Tony Safety Department',
@@ -20,11 +21,11 @@ export const WHITELIST_ACCOUNT2: readonly string[] = [
 ];
 
 /** Monday Leads sidebar names per deploy (must match USER_BOARD_MAP keys in api/monday/leads). */
-export const MONDAY_USERS_ACCOUNT1: readonly string[] = ['Fred', 'Ethan', 'Nick', 'Sam', 'Oliver', 'John'];
+export const MONDAY_USERS_ACCOUNT1: readonly string[] = ['Fred', 'Carla', 'Ethan', 'Nick', 'Sam', 'Oliver', 'John'];
 export const MONDAY_USERS_ACCOUNT2: readonly string[] = ['Alex Chester', 'Winston', 'Simon Cooper', 'Tim Baker'];
 
 /** Combined list (dual-mode / legacy); order kept for stable UI colors. */
-export const MONDAY_USERS_ALL: readonly string[] = ['Alex Chester', 'Fred', 'Ethan', 'Winston', 'Simon Cooper', 'Tim Baker', 'Nick', 'Sam', 'Oliver', 'John'];
+export const MONDAY_USERS_ALL: readonly string[] = ['Alex Chester', 'Fred', 'Carla', 'Ethan', 'Winston', 'Simon Cooper', 'Tim Baker', 'Nick', 'Sam', 'Oliver', 'John'];
 
 export function getMondayUsersForDeploy(deploy: RcDeployAccount | null): readonly string[] {
   if (deploy === 'account1') return MONDAY_USERS_ACCOUNT1;

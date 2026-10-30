@@ -18,6 +18,7 @@ export const JM_HEAD_HR_RC_NAME = 'Alex Chester';
 /** RC name -> Monday user name mapping */
 export const RC_TO_MONDAY_USER: Record<string, string | null> = {
   'Fred Royce': 'Fred',
+  'Carla Connor': 'Carla',
   'Ethan Parker': 'Ethan',
   'Tony Safety Department': null,
   'Alex Chester': 'Alex Chester',
