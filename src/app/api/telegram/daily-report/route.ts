@@ -162,6 +162,52 @@ function adviceForStatName(
   return undefined;
 }
 
+const TELEGRAM_MAX_LENGTH = 4096;
+const TELEGRAM_CHUNK_LENGTH = TELEGRAM_MAX_LENGTH - 96;
+
+function escapeMarkdown(text: string): string {
+  return text.replace(/[_*`\[]/g, (character) => `\\${character}`);
+}
+
+function splitTelegramMessage(text: string): string[] {
+  const chunks: string[] = [];
+  let current = '';
+
+  for (const line of text.split('\n')) {
+    const candidate = current ? `${current}\n${line}` : line;
+    if (candidate.length <= TELEGRAM_CHUNK_LENGTH) {
+      current = candidate;
+      continue;
+    }
+
+    if (current) {
+      chunks.push(current);
+      current = '';
+    }
+
+    let remaining = line;
+    while (remaining.length > TELEGRAM_CHUNK_LENGTH) {
+      let splitAt = remaining.lastIndexOf(' ', TELEGRAM_CHUNK_LENGTH);
+      if (splitAt <= 0) splitAt = TELEGRAM_CHUNK_LENGTH;
+      if (
+        splitAt < remaining.length &&
+        remaining.charCodeAt(splitAt - 1) >= 0xd800 &&
+        remaining.charCodeAt(splitAt - 1) <= 0xdbff &&
+        remaining.charCodeAt(splitAt) >= 0xdc00 &&
+        remaining.charCodeAt(splitAt) <= 0xdfff
+      ) {
+        splitAt--;
+      }
+      chunks.push(remaining.slice(0, splitAt));
+      remaining = remaining.slice(splitAt).trimStart();
+    }
+    current = remaining;
+  }
+
+  if (current) chunks.push(current);
+  return chunks;
+}
+
 function buildReportMessage(
   statsList: UserStats[],
   aiReport: AIReportResult | null,
@@ -171,28 +217,24 @@ function buildReportMessage(
 ): string {
   const totals = aggregateTotals(statsList);
 
-  let msg = `📊 *HR Daily Report — ${companyLabel} — ${reportDateStr}*\n`;
-  msg += `Shift: ${shiftLabel} US Central (7pm–4am Tashkent)\n\n`;
+  let msg = `📊 *HR Daily Report — ${escapeMarkdown(companyLabel)} — ${escapeMarkdown(reportDateStr)}*\n`;
+  msg += `Shift: ${escapeMarkdown(shiftLabel)} US Central (7pm–4am Tashkent)\n\n`;
 
   for (const s of statsList) {
-    msg += `👤 *${s.name}*\n`;
+    msg += `👤 *${escapeMarkdown(s.name)}*\n`;
     msg += `   Talk: ${s.talkMinutes} min | Leads: ${s.leadsTotal} total (${s.leadsOnTime} on-time, ${s.leadsLate} late, ${s.leadsFollowUp} follow-up) | Calls: ${s.callsConnected} connected, ${s.callsMissed} missed | Rejected: ${s.leadsRejected}\n`;
     const adv = aiReport ? adviceForStatName(s.name, aiReport.advice) : undefined;
-    if (adv) msg += `\n   💡 *Advice:* ${adv}\n`;
+    if (adv) msg += `\n   💡 *Advice:* ${escapeMarkdown(adv)}\n`;
     msg += `\n`;
   }
 
   if (aiReport) {
-    msg += `📋 *Daily Outcome*\n${aiReport.dailyOutcome}\n\n`;
+    msg += `📋 *Daily Outcome*\n${escapeMarkdown(aiReport.dailyOutcome)}\n\n`;
   }
 
   msg += `📈 *TOTAL (${statsList.length} users)*\n`;
   msg += `   Talk: ${totals.talk} min | Leads: ${totals.total} total (${totals.onTime} on-time, ${totals.late} late, ${totals.followUp} follow-up) | Calls: ${totals.connected} connected, ${totals.missed} missed | Rejected: ${totals.rejected}`;
 
-  const TELEGRAM_MAX_LENGTH = 4096;
-  if (msg.length > TELEGRAM_MAX_LENGTH) {
-    msg = msg.slice(0, TELEGRAM_MAX_LENGTH - 20) + '\n\n...[truncated]';
-  }
   return msg;
 }
 
@@ -207,46 +249,63 @@ async function sendTelegramMessage(
 ): Promise<{ ok: boolean; error?: string; migratedTo?: string }> {
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
   let attemptChatId: string | number = chatId;
+  let migratedTo: string | undefined;
 
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: attemptChatId,
-        text,
-        parse_mode: 'Markdown',
-      }),
-    });
-    const raw = await res.text();
-    let data: {
-      ok?: boolean;
-      error_code?: number;
-      description?: string;
-      parameters?: { migrate_to_chat_id?: number };
-    };
-    try {
-      data = JSON.parse(raw) as typeof data;
-    } catch {
-      return { ok: false, error: raw || `HTTP ${res.status}` };
-    }
-    if (data.ok === true) {
-      return attempt > 0 ? { ok: true, migratedTo: String(attemptChatId) } : { ok: true };
-    }
+  for (const chunk of splitTelegramMessage(text)) {
+    let parseMode: 'Markdown' | undefined = 'Markdown';
+    let migrationRetried = false;
 
-    const migrateId = data.parameters?.migrate_to_chat_id;
-    if (
-      attempt === 0 &&
-      typeof migrateId === 'number' &&
-      data.description?.toLowerCase().includes('supergroup')
-    ) {
-      console.warn('[telegram/daily-report] Supergroup migration, retrying with chat_id:', migrateId);
-      attemptChatId = migrateId;
-      continue;
+    while (true) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: attemptChatId,
+          text: chunk,
+          ...(parseMode ? { parse_mode: parseMode } : {}),
+        }),
+      });
+      const raw = await res.text();
+      let data: {
+        ok?: boolean;
+        error_code?: number;
+        description?: string;
+        parameters?: { migrate_to_chat_id?: number };
+      };
+      try {
+        data = JSON.parse(raw) as typeof data;
+      } catch {
+        return { ok: false, error: raw || `HTTP ${res.status}` };
+      }
+      if (data.ok === true) break;
+
+      const description = data.description?.toLowerCase() || '';
+      if (
+        parseMode &&
+        (description.includes("can't parse entities") || description.includes("can't find end of the entity"))
+      ) {
+        console.warn('[telegram/daily-report] Markdown parse failed, retrying as plain text');
+        parseMode = undefined;
+        continue;
+      }
+
+      const migrateId = data.parameters?.migrate_to_chat_id;
+      if (
+        !migrationRetried &&
+        typeof migrateId === 'number' &&
+        description.includes('supergroup')
+      ) {
+        console.warn('[telegram/daily-report] Supergroup migration, retrying with chat_id:', migrateId);
+        attemptChatId = migrateId;
+        migratedTo = String(migrateId);
+        migrationRetried = true;
+        continue;
+      }
+      return { ok: false, error: raw };
     }
-    return { ok: false, error: raw };
   }
-  return { ok: false, error: 'Telegram send failed after migration retry' };
+
+  return migratedTo ? { ok: true, migratedTo } : { ok: true };
 }
 
 interface UserWithExt {
